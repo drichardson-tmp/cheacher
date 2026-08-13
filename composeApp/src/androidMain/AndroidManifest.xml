@@ -3,12 +3,12 @@
 
     <application
         android:allowBackup="true"
-        android:label="Roseau"
+        android:label="Cheacher"
         android:supportsRtl="true"
-        android:theme="@style/Theme.Roseau">
+        android:theme="@style/Theme.Cheacher">
 
         <activity
-            android:name="com.roseau.opening.MainActivity"
+            android:name="com.cheacher.app.MainActivity"
             android:exported="true"
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|uiMode"
             android:windowSoftInputMode="adjustResize">

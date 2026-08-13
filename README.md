@@ -1,8 +1,8 @@
-# Roseau
+# Cheacher
 
 A chess opening teacher that believes names come first and words come last.
 
-Roseau teaches repertoires in two phases, both played out on a real board:
+Cheacher teaches repertoires in two phases, both played out on a real board:
 
 1. **Named Concept Walkthrough (Guided).** The prompt is the canonical *name* of the
    line the next move creates — "King's Pawn Opening" → 1. e4, "Sicilian Defence" →
@@ -18,14 +18,14 @@ Roseau teaches repertoires in two phases, both played out on a real board:
    snap back) or **One Allowance** (the first miss is forgiven in place). The tree is
    the scoreboard: "3 of 5 branches".
 
-Roseau also remembers. Every miss, every completed line, every session lands in a
+Cheacher also remembers. Every miss, every completed line, every session lands in a
 per-repertoire `TrainingRecord`, persisted with DataStore on both platforms, and
 surfaces on the shelf as "trouble spots".
 
 ## Architecture
 
 ```
-composeApp/src/commonMain/kotlin/com/roseau/opening/
+composeApp/src/commonMain/kotlin/com/cheacher/opening/
 ├── chess/        Pure-Kotlin chess engine. Immutable Position, full legal move
 │                 generation (castling, en passant, promotion), FEN, SAN
 │                 (render + generate-and-match parsing). Zero dependencies.

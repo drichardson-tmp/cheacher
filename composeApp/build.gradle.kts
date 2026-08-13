@@ -52,11 +52,11 @@ kotlin {
 }
 
 android {
-    namespace = "com.roseau.opening"
+    namespace = "com.cheacher.app"
     compileSdk = libs.versions.androidCompileSdk.get().toInt()
 
     defaultConfig {
-        applicationId = "com.roseau.opening"
+        applicationId = "com.cheacher.app"
         minSdk = libs.versions.androidMinSdk.get().toInt()
         targetSdk = libs.versions.androidTargetSdk.get().toInt()
         versionCode = 1
