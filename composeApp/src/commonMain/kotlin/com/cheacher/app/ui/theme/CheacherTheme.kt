@@ -10,6 +10,10 @@ import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.ReadOnlyComposable
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
@@ -19,66 +23,185 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 /**
- * Cheacher's visual identity: **warm wood and ink**.
+ * Cheacher's visual identity: **warm wood and cool ink**.
  *
  * The app should feel like a well-loved chess study — walnut boards, cream paper,
- * ink annotations, one flash of brass. Opening names are typography events (big serif),
- * moves are ink on paper (monospace), and everything else stays out of the way.
+ * ink annotations, one flash of brass. The palette is built on classic colour theory:
+ *
+ * - **60/30: a warm analogous field.** Paper, parchment, and wood all sit on one short
+ *   arc of ochre-to-umber hues; they are the dominant field and never compete.
+ * - **The complement: iron-gall ink.** Real iron-gall ink is not brown — it dries to a
+ *   cool blue-black with a hint of indigo. Every text shade sits on that cool axis, so
+ *   *warm field against cool ink* is the scheme's one fundamental contrast, and the
+ *   warm hues get the complement they were missing.
+ * - **10: brass.** One metal, used only for the moments that deserve it — streaks,
+ *   unlocks, the cursor ring.
+ * - **Verdicts as natural pigments.** Leaf green and madder red, tuned so a banked
+ *   branch is clearly *lighter* than a lost one — the verdict reads by value as well
+ *   as hue, which is what keeps it legible to deuteranopic eyes.
+ *
+ * Every text-bearing pairing here is enforced by `PaletteContrastTest`: the palette is
+ * verified content, exactly like the repertoires.
  */
 object Ink {
-    // Paper & wood.
-    val parchment = Color(0xFFF6EFE3)
+    // The warm field: one analogous arc from paper to walnut.
     val paper = Color(0xFFFDF8EE)
+    val parchment = Color(0xFFF6EFE3)
+    val vellum = Color(0xFFEFE4D0)
+    val boardLight = Color(0xFFEED9B7)
+    val boardDark = Color(0xFF9A6743)
     val walnut = Color(0xFF6B4A31)
     val walnutDeep = Color(0xFF4A3122)
-    val boardLight = Color(0xFFEED9B7)
-    val boardDark = Color(0xFFA57552)
+    val ruleLine = Color(0xFF9A8A6A)
 
-    // Ink & accents.
-    val ink = Color(0xFF2B2119)
-    val inkFaded = Color(0xFF7A6A5A)
+    // The cool axis: iron-gall ink, blue-black leaning indigo.
+    val ink = Color(0xFF262B33)
+    val inkFaded = Color(0xFF5C6068)
+    val inkWash = Color(0xFF4E5A75)
+
+    // Brass, the single accent. `brassDeep` is the text-grade cut; the bright cuts
+    // are for glows and rings, never for words.
     val brass = Color(0xFFB8863B)
+    val brassDeep = Color(0xFF96682A)
     val brassBright = Color(0xFFD9A84E)
 
-    // Verdicts.
-    val leaf = Color(0xFF4E7C4A)
+    // Natural pigments for verdicts. The *Fill cuts carry white text on chips; the
+    // plain cuts are text-grade on paper.
+    val leaf = Color(0xFF477443)
+    val leafFill = Color(0xFF5F8F52)
     val leafBright = Color(0xFF6FA36A)
     val madder = Color(0xFFA83E32)
+    val madderFill = Color(0xFF8E2F24)
     val madderSoft = Color(0xFFD8887F)
 
-    // Board annotations.
-    val lastMoveGlow = Color(0x66D9A84E)
-    val selectedGlow = Color(0x8CB8863B)
-    val targetDot = Color(0x59332211)
-    val checkGlow = Color(0x80A83E32)
+    // Pieces: cream and ink, each with the edge that carries it on its same-tone square.
+    val pieceCream = Color(0xFFFBF3E4)
+    val pieceCreamEdge = Color(0xFF3A322A)
+    val pieceInk = Color(0xFF20242C)
+    val pieceInkEdgeDay = Color(0xFF0F1115)
+    val pieceInkEdgeNight = Color(0xFFC9BFA9)
 
-    // Night study: same wood, lamp off.
+    // Night study: same wood, lamp off — darker values, slightly desaturated, and the
+    // iron-gall ink flips to the pale role while staying cool.
     val nightPaper = Color(0xFF201A14)
     val nightCard = Color(0xFF2B231B)
-    val nightInk = Color(0xFFEADDC8)
+    val nightVellum = Color(0xFF3A2F24)
+    val nightInk = Color(0xFFD9DDE4)
+    val nightInkFaded = Color(0xFFAEB0B6)
+    val nightRuleLine = Color(0xFF8C7B60)
+    val nightBoardLight = Color(0xFFC4A87E)
+    val nightBoardDark = Color(0xFF5E4630)
+    val nightLeafFill = Color(0xFF55814B)
+    val nightMadderFill = Color(0xFF7E2B20)
+    val nightInkWash = Color(0xFFA9B4CD)
+    val lockedGhostDay = Color(0xFFE9DFCB)
+    val lockedGhostNight = Color(0xFF352C22)
 }
 
-private val LightColors = lightColorScheme(
+/**
+ * The app-specific colour roles Material3's scheme has no words for: board wood,
+ * move annotations, verdict pigments, the brass moments, and the tree's four states.
+ *
+ * One immutable value per scheme; both are derived from the same hue relationships in
+ * [Ink], so day and night are the same study with the lamp on or off. Reach it as
+ * `CheacherTheme.colors` — the Material slots keep carrying the standard chrome.
+ */
+@Immutable
+data class CheacherColors(
+    val boardLight: Color,
+    val boardDark: Color,
+    val lastMoveGlow: Color,
+    val selectedGlow: Color,
+    val targetDot: Color,
+    val checkGlow: Color,
+    val pieceCream: Color,
+    val pieceCreamEdge: Color,
+    val pieceInk: Color,
+    val pieceInkEdge: Color,
+    val verdictCorrect: Color,
+    val verdictMiss: Color,
+    val onVerdict: Color,
+    val reviewTint: Color,
+    val lockedGhost: Color,
+    val streakBrass: Color,
+    val treeUnvisited: Color,
+    val treeInProgress: Color,
+    val treeCompleted: Color,
+    val treeFailed: Color,
+    val treeOpenText: Color,
+)
+
+internal val DayCheacherColors = CheacherColors(
+    boardLight = Ink.boardLight,
+    boardDark = Ink.boardDark,
+    lastMoveGlow = Ink.brassBright.copy(alpha = 0.40f),
+    selectedGlow = Ink.brass.copy(alpha = 0.55f),
+    targetDot = Ink.ink.copy(alpha = 0.35f),
+    checkGlow = Ink.madder.copy(alpha = 0.50f),
+    pieceCream = Ink.pieceCream,
+    pieceCreamEdge = Ink.pieceCreamEdge,
+    pieceInk = Ink.pieceInk,
+    pieceInkEdge = Ink.pieceInkEdgeDay,
+    verdictCorrect = Ink.leafFill,
+    verdictMiss = Ink.madderFill,
+    onVerdict = Ink.paper,
+    reviewTint = Ink.inkWash,
+    lockedGhost = Ink.lockedGhostDay,
+    streakBrass = Ink.brassDeep,
+    treeUnvisited = Ink.vellum,
+    treeInProgress = Ink.boardLight,
+    treeCompleted = Ink.leafFill,
+    treeFailed = Ink.madderFill,
+    treeOpenText = Ink.ink,
+)
+
+internal val NightCheacherColors = CheacherColors(
+    boardLight = Ink.nightBoardLight,
+    boardDark = Ink.nightBoardDark,
+    lastMoveGlow = Ink.brassBright.copy(alpha = 0.35f),
+    selectedGlow = Ink.brassBright.copy(alpha = 0.50f),
+    // A dark dot vanishes on dark wood, so at night the annotation ink goes pale.
+    targetDot = Ink.pieceCream.copy(alpha = 0.40f),
+    checkGlow = Ink.madderSoft.copy(alpha = 0.50f),
+    pieceCream = Ink.pieceCream,
+    pieceCreamEdge = Ink.pieceCreamEdge,
+    pieceInk = Ink.pieceInk,
+    // Lamp off: the dark pieces are carried by rim light instead of shadow.
+    pieceInkEdge = Ink.pieceInkEdgeNight,
+    verdictCorrect = Ink.nightLeafFill,
+    verdictMiss = Ink.nightMadderFill,
+    onVerdict = Ink.paper,
+    reviewTint = Ink.nightInkWash,
+    lockedGhost = Ink.lockedGhostNight,
+    streakBrass = Ink.brassBright,
+    treeUnvisited = Ink.nightVellum,
+    treeInProgress = Ink.walnutDeep,
+    treeCompleted = Ink.nightLeafFill,
+    treeFailed = Ink.nightMadderFill,
+    treeOpenText = Ink.nightInk,
+)
+
+internal val LightColors = lightColorScheme(
     primary = Ink.walnut,
     onPrimary = Ink.paper,
     primaryContainer = Ink.boardLight,
     onPrimaryContainer = Ink.walnutDeep,
-    secondary = Ink.brass,
-    onSecondary = Ink.ink,
+    secondary = Ink.brassDeep,
+    onSecondary = Ink.paper,
     tertiary = Ink.leaf,
     onTertiary = Ink.paper,
     background = Ink.parchment,
     onBackground = Ink.ink,
     surface = Ink.paper,
     onSurface = Ink.ink,
-    surfaceVariant = Color(0xFFEFE4D0),
+    surfaceVariant = Ink.vellum,
     onSurfaceVariant = Ink.inkFaded,
     error = Ink.madder,
     onError = Ink.paper,
-    outline = Color(0xFFC9B99F),
+    outline = Ink.ruleLine,
 )
 
-private val DarkColors = darkColorScheme(
+internal val DarkColors = darkColorScheme(
     primary = Ink.brassBright,
     onPrimary = Ink.nightPaper,
     primaryContainer = Ink.walnutDeep,
@@ -91,11 +214,11 @@ private val DarkColors = darkColorScheme(
     onBackground = Ink.nightInk,
     surface = Ink.nightCard,
     onSurface = Ink.nightInk,
-    surfaceVariant = Color(0xFF3A2F24),
-    onSurfaceVariant = Color(0xFFB4A48E),
+    surfaceVariant = Ink.nightVellum,
+    onSurfaceVariant = Ink.nightInkFaded,
     error = Ink.madderSoft,
     onError = Ink.nightPaper,
-    outline = Color(0xFF5A4C3B),
+    outline = Ink.nightRuleLine,
 )
 
 /**
@@ -177,15 +300,29 @@ object Motion {
     fun <T> fade() = spring<T>(dampingRatio = 1f, stiffness = Spring.StiffnessLow)
 }
 
+private val LocalCheacherColors = staticCompositionLocalOf { DayCheacherColors }
+
+/** Companion accessor, [MaterialTheme]-style: `CheacherTheme.colors.boardDark`. */
+object CheacherTheme {
+    val colors: CheacherColors
+        @Composable
+        @ReadOnlyComposable
+        get() = LocalCheacherColors.current
+}
+
 @Composable
 fun CheacherTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     content: @Composable () -> Unit,
 ) {
-    MaterialTheme(
-        colorScheme = if (darkTheme) DarkColors else LightColors,
-        typography = CheacherTypography,
-        shapes = CheacherShapes,
-        content = content,
-    )
+    CompositionLocalProvider(
+        LocalCheacherColors provides if (darkTheme) NightCheacherColors else DayCheacherColors,
+    ) {
+        MaterialTheme(
+            colorScheme = if (darkTheme) DarkColors else LightColors,
+            typography = CheacherTypography,
+            shapes = CheacherShapes,
+            content = content,
+        )
+    }
 }

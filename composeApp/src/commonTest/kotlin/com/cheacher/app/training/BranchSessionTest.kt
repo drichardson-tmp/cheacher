@@ -153,6 +153,66 @@ class BranchSessionTest {
         assertEquals(0, state.progress.closedLines)
     }
 
+    /** Line 0 of the tiny tree: 1.e4 e5 2.Nf3. Line 1 (the Sicilian) stays locked. */
+    private val lineZeroOnly = setOf("0", "0.0", "0.0.0")
+
+    @Test
+    fun lockedNodesStartLockedAndOffTheScoreboard() {
+        val state = BranchState.start(tree, allowedNodeIds = lineZeroOnly)
+        assertEquals(NodeStatus.LOCKED, state.statusOf(assertNotNull(tree.node("0.1"))))
+        assertEquals(NodeStatus.LOCKED, state.statusOf(assertNotNull(tree.node("0.1.0"))))
+        assertEquals(NodeStatus.UNVISITED, state.statusOf(assertNotNull(tree.node("0"))))
+        assertEquals(1, state.progress.totalLines, "locked lines do not exist this round")
+        assertFalse(state.finished)
+    }
+
+    @Test
+    fun lockedDoorRattlesWithoutPenaltyOrMovement() {
+        val state = BranchState.start(tree, policy = MistakePolicy.STRICT, allowedNodeIds = lineZeroOnly)
+            .submit(move("e2e4"))
+            .submit(move("c7c5")) // a real repertoire move, but behind the frontier
+        val event = assertIs<BranchEvent.Locked>(state.lastEvent)
+        assertEquals("0.1", event.node.id)
+        assertEquals("0", state.cursorId, "the board does not move")
+        assertEquals(0, state.strikes, "a locked door is not a mistake")
+        assertEquals(0, state.progress.failedLines)
+        assertEquals(listOf("0.0"), state.openMoves.map { it.id }, "only the unlocked reply is open")
+    }
+
+    @Test
+    fun closingTheUnlockedSubtreeFinishesTheRound() {
+        var state = BranchState.start(tree, allowedNodeIds = lineZeroOnly)
+        for (uci in listOf("e2e4", "e7e5", "g1f3")) state = state.submit(move(uci))
+        assertTrue(state.finished, "the locked Sicilian is not waiting for anyone")
+        assertEquals(BranchEvent.SessionComplete, state.lastEvent)
+        assertEquals(1, state.progress.closedLines)
+        assertEquals(1, state.progress.totalLines)
+        // Roll-up treats the locked sibling as closed, so 1.e4 completes…
+        assertEquals(NodeStatus.COMPLETED, state.statusOf(assertNotNull(tree.node("0"))))
+        // …but the locked branch stays locked, never repainted as played.
+        assertEquals(NodeStatus.LOCKED, state.statusOf(assertNotNull(tree.node("0.1"))))
+    }
+
+    @Test
+    fun failingInsideTheGateLeavesLockedNodesLocked() {
+        val state = BranchState.start(tree, policy = MistakePolicy.STRICT, allowedNodeIds = lineZeroOnly)
+            .submit(move("e2e4"))
+            .submit(move("d2d4")) // not in the tree at all
+        assertIs<BranchEvent.BranchFailed>(state.lastEvent)
+        assertEquals(NodeStatus.FAILED, state.statusOf(assertNotNull(tree.node("0"))))
+        assertEquals(NodeStatus.LOCKED, state.statusOf(assertNotNull(tree.node("0.1.0"))))
+        assertTrue(state.finished, "the only unlocked root move failed, so the round is over")
+        assertEquals(1, state.progress.failedLines)
+        assertEquals(1, state.progress.totalLines)
+    }
+
+    @Test
+    fun nullGateKeepsTheWholeTreeExactlyAsBefore() {
+        val state = BranchState.start(tree, allowedNodeIds = null)
+        assertEquals(2, state.progress.totalLines)
+        assertTrue(tree.allNodes.none { state.statusOf(it) == NodeStatus.LOCKED })
+    }
+
     @Test
     fun pathMirrorsTheCursor() {
         val state = BranchState.start(tree)

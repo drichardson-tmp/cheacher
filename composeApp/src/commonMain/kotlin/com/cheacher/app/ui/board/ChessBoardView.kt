@@ -37,7 +37,8 @@ import com.cheacher.app.chess.Piece
 import com.cheacher.app.chess.PieceType
 import com.cheacher.app.chess.Position
 import com.cheacher.app.chess.Squares
-import com.cheacher.app.ui.theme.Ink
+import com.cheacher.app.ui.theme.CheacherColors
+import com.cheacher.app.ui.theme.CheacherTheme
 import com.cheacher.app.ui.theme.Motion
 import com.cheacher.app.chess.Color as ChessColor
 import kotlin.math.roundToInt
@@ -86,6 +87,7 @@ fun ChessBoardView(
     }
 
     val pieces = rememberTrackedPieces(position)
+    val colors = CheacherTheme.colors
 
     BoxWithConstraints(
         modifier = modifier
@@ -114,26 +116,26 @@ fun ChessBoardView(
         }
 
         Canvas(modifier = Modifier.fillMaxSize()) {
-            drawSquares(squarePx, orientation)
+            drawSquares(squarePx, orientation, colors)
             lastMove?.let {
-                drawSquareFill(screenOffset(it.from), squarePx, Ink.lastMoveGlow)
-                drawSquareFill(screenOffset(it.to), squarePx, Ink.lastMoveGlow)
+                drawSquareFill(screenOffset(it.from), squarePx, colors.lastMoveGlow)
+                drawSquareFill(screenOffset(it.to), squarePx, colors.lastMoveGlow)
             }
-            selected?.let { drawSquareFill(screenOffset(it), squarePx, Ink.selectedGlow) }
-            checkedKing?.let { drawCheckGlow(screenOffset(it), squarePx) }
+            selected?.let { drawSquareFill(screenOffset(it), squarePx, colors.selectedGlow) }
+            checkedKing?.let { drawCheckGlow(screenOffset(it), squarePx, colors.checkGlow) }
             for (target in targets.distinctBy { it.to }) {
                 val origin = screenOffset(target.to)
                 val centre = origin + Offset(squarePx / 2, squarePx / 2)
                 if (position[target.to] != null) {
                     // Capture: a ring around the victim rather than a dot on top of it.
                     drawCircle(
-                        color = Ink.targetDot,
+                        color = colors.targetDot,
                         radius = squarePx * 0.46f,
                         center = centre,
                         style = Stroke(width = squarePx * 0.09f),
                     )
                 } else {
-                    drawCircle(color = Ink.targetDot, radius = squarePx * 0.15f, center = centre)
+                    drawCircle(color = colors.targetDot, radius = squarePx * 0.15f, center = centre)
                 }
             }
         }
@@ -191,14 +193,14 @@ fun ChessBoardView(
     }
 }
 
-private fun DrawScope.drawSquares(squarePx: Float, orientation: ChessColor) {
+private fun DrawScope.drawSquares(squarePx: Float, orientation: ChessColor, colors: CheacherColors) {
     for (x in 0..7) {
         for (y in 0..7) {
             val file = if (orientation == ChessColor.WHITE) x else 7 - x
             val rank = if (orientation == ChessColor.WHITE) 7 - y else y
             val light = (file + rank) % 2 == 1
             drawRect(
-                color = if (light) Ink.boardLight else Ink.boardDark,
+                color = if (light) colors.boardLight else colors.boardDark,
                 topLeft = Offset(x * squarePx, y * squarePx),
                 size = Size(squarePx, squarePx),
             )
@@ -210,9 +212,9 @@ private fun DrawScope.drawSquareFill(origin: Offset, squarePx: Float, color: Col
     drawRect(color = color, topLeft = origin, size = Size(squarePx, squarePx))
 }
 
-private fun DrawScope.drawCheckGlow(origin: Offset, squarePx: Float) {
+private fun DrawScope.drawCheckGlow(origin: Offset, squarePx: Float, color: Color) {
     drawRoundRect(
-        color = Ink.checkGlow,
+        color = color,
         topLeft = origin + Offset(squarePx * 0.04f, squarePx * 0.04f),
         size = Size(squarePx * 0.92f, squarePx * 0.92f),
         cornerRadius = CornerRadius(squarePx * 0.2f),

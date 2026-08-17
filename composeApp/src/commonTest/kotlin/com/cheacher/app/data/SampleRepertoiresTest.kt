@@ -31,6 +31,29 @@ class SampleRepertoiresTest {
     }
 
     @Test
+    fun kingsPawnIsTheFirstBookOnTheShelf() {
+        assertEquals("kings-pawn", SampleRepertoires.all.first().id, "the on-ramp comes before the deep books")
+    }
+
+    @Test
+    fun kingsPawnIsAShallowOnRamp() {
+        val tree = OpeningTree.resolve(SampleRepertoires.kingsPawn)
+        assertEquals(4, tree.lines.size)
+        // DFS order is the progression ladder: the Open Game trunk first, then the
+        // sibling fork at the deepest junction, then the one-fork defence stubs.
+        assertEquals(
+            listOf("Italian Game", "Ruy Lopez", "Open Sicilian, Preparation", "French Defence, Normal Variation"),
+            tree.lines.map { it.last().name },
+        )
+        assertTrue(tree.lines.all { it.size <= 6 }, "the on-ramp stays shallow")
+        // Lines 0 and 1 share everything but the final bishop move — the DFS promise.
+        assertEquals(
+            tree.lines[0].dropLast(1).map { it.id },
+            tree.lines[1].dropLast(1).map { it.id },
+        )
+    }
+
+    @Test
     fun sicilianBranchesIntoOpenAndClosed() {
         val tree = OpeningTree.resolve(SampleRepertoires.sicilianCrossroads)
         val afterC5 = tree.node("0.0") ?: error("missing 1...c5")

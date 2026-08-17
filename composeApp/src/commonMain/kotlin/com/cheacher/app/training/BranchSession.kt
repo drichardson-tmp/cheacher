@@ -11,10 +11,16 @@ enum class NodeStatus {
     UNVISITED,
     IN_PROGRESS,
     COMPLETED,
-    FAILED;
+    FAILED,
+
+    /**
+     * Behind the progression frontier: barely-there on the diagram, inert on the board.
+     * A locked door is not a mistake — trying it just rattles, it never costs a strike.
+     */
+    LOCKED;
 
     /** Closed nodes are pruned from the board: you cannot walk into them again this round. */
-    val isClosed: Boolean get() = this == COMPLETED || this == FAILED
+    val isClosed: Boolean get() = this == COMPLETED || this == FAILED || this == LOCKED
 }
 
 /** What a wrong move costs. */
@@ -66,7 +72,9 @@ data class BranchState(
 
     val progress: BranchProgress
         get() {
-            val leaves = tree.lines.map { it.last() }
+            // Locked lines are not on the syllabus this round, so they are not on the
+            // scoreboard either: "1 of 1", not "1 of 5 and four you were never shown".
+            val leaves = tree.lines.map { it.last() }.filter { statusOf(it) != NodeStatus.LOCKED }
             return BranchProgress(
                 closedLines = leaves.count { statusOf(it).isClosed },
                 totalLines = leaves.size,
@@ -75,16 +83,31 @@ data class BranchState(
         }
 
     companion object {
+        /**
+         * [allowedNodeIds] is the progression gate: nodes outside it start the round
+         * [NodeStatus.LOCKED] — unplayable, unpenalised, and outside the score. Null
+         * means the whole tree, which keeps full-tree practice exactly as it was.
+         */
         fun start(
             tree: OpeningTree,
             policy: MistakePolicy = MistakePolicy.STRICT,
             autoReplyFor: Color? = null,
-        ): BranchState = BranchState(
-            tree = tree,
-            policy = policy,
-            autoReplyFor = autoReplyFor,
-            finished = tree.rootChildren.isEmpty(),
-        ).autoReply()
+            allowedNodeIds: Set<String>? = null,
+        ): BranchState {
+            val locked = if (allowedNodeIds == null) {
+                emptyMap()
+            } else {
+                tree.allNodes.filter { it.id !in allowedNodeIds }
+                    .associate { it.id to NodeStatus.LOCKED }
+            }
+            return BranchState(
+                tree = tree,
+                statuses = locked,
+                policy = policy,
+                autoReplyFor = autoReplyFor,
+                finished = tree.rootChildren.all { locked[it.id]?.isClosed == true },
+            ).autoReply()
+        }
     }
 }
 
@@ -107,6 +130,9 @@ sealed interface BranchEvent {
     /** Replaying a line that is already closed out. Cheap to do, so we just say so. */
     data class AlreadyClosed(val node: TreeNode) : BranchEvent
 
+    /** A real repertoire move behind the frontier. The door rattles; nothing is lost. */
+    data class Locked(val node: TreeNode) : BranchEvent
+
     data object SessionComplete : BranchEvent
 }
 
@@ -122,6 +148,9 @@ fun BranchState.submit(move: Move): BranchState {
     val match = children.firstOrNull { it.move == move }
 
     if (match == null) return penalise(move)
+    // A locked branch is not a wrong move — the learner found a real repertoire move,
+    // just one the ladder has not reached. No strike, no snap-back, no board change.
+    if (statusOf(match) == NodeStatus.LOCKED) return copy(lastEvent = BranchEvent.Locked(match))
     if (statusOf(match).isClosed) return copy(lastEvent = BranchEvent.AlreadyClosed(match))
 
     val advanced = copy(

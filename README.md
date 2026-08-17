@@ -18,9 +18,24 @@ Cheacher teaches repertoires in two phases, both played out on a real board:
    snap back) or **One Allowance** (the first miss is forgiven in place). The tree is
    the scoreboard: "3 of 5 branches".
 
-Cheacher also remembers. Every miss, every completed line, every session lands in a
-per-repertoire `TrainingRecord`, persisted with DataStore on both platforms, and
-surfaces on the shelf as "trouble spots".
+By default the shelf follows the **coach's plan**: the repertoire is conquered one
+branch at a time, depth-first. A line is *mastered* when it has been named once (guided)
+and recalled once (branch) — then the next line joins the syllabus, always the fork at
+the deepest open junction, so every new line is "everything you already know, plus one
+new turn". Landing a new fork is a small brass moment ("Unlocked: Ruy Lopez").
+
+Mastered lines are never filed away. Every session mixes the new line with reviews:
+each clean blind recall of a line grows its streak, and the streak sets how long the
+line rests before the coach deals it again — roughly 1, 3, 7, 14, then 30 days, the
+classic expanding-retrieval ladder. Miss a move anywhere on a line and its streak resets,
+so trouble lines come straight back. The ladder is a prioritiser, never a gate: nothing
+is withheld, no date is ever waved at you, and "Full tree" — everything open at once —
+is always one tap away. The shelf talks in counts and streaks instead: "Today: 1 new
+line · 2 reviews", "3 days in a row", "Ruy Lopez: 4 clean recalls".
+
+Cheacher also remembers. Every miss, every completed line, every review streak, every
+session lands in a per-repertoire `TrainingRecord`, persisted with DataStore on both
+platforms, and surfaces on the shelf as "trouble spots".
 
 ## Architecture
 
@@ -35,14 +50,20 @@ composeApp/src/commonMain/kotlin/com/cheacher/opening/
 │                 and the authoring DSL.
 ├── training/     The two study modes as pure reducers: GuidedState and BranchState.
 │                 Every transition is a value; no clocks, no coroutines, fully
-│                 testable without UI.
+│                 testable without UI. Progression derives the depth-first mastery
+│                 ladder (mastered / unlocked / locked lines) from the tree and the
+│                 TrainingRecord — computed, never stored. Scheduler composes on top:
+│                 a pure (tree, record, now) → syllabus function that deals today's
+│                 session — the frontier line plus whichever reviews earned a seat on
+│                 the expanding 1/3/7/14/30-day ladder.
 ├── progress/     TrainingRecord (pure accumulation of misses/completions/sessions),
 │                 ProgressStore (interface), DataStoreProgressStore (JSON blob per
 │                 repertoire in one preferences file), expect/actual file paths.
 ├── data/         SampleRepertoires — the built-in Italian Game and Sicilian
 │                 Crossroads content, written with the DSL.
-└── ui/           Compose Multiplatform. theme/ (warm wood & ink identity, spring
-                  motion specs), board/ (ChessBoardView + PieceRenderer seam),
+└── ui/           Compose Multiplatform. theme/ (warm wood & iron-gall ink identity —
+                  a 60-30-10 palette with contrast-verified day and night schemes —
+                  plus spring motion specs), board/ (ChessBoardView + PieceRenderer seam),
                   tree/ (VariationTreeView mini-DAG), screens/ (Home, Guided,
                   Branch + their ViewModels), App.kt (sealed-Screen navigation).
 ```
@@ -86,8 +107,10 @@ automatically on every Xcode build.
 The suite covers the engine (FEN round-trips, perft — 8,902 nodes at depth 3 from the
 start, Kiwipete at depth 2 — castling edge cases, en passant, promotion, SAN
 disambiguation and a render→parse round-trip over every legal move in a bag of
-positions), tree resolution, both training reducers, sample-content validity (every
-authored SAN must be legal or the test fails), and TrainingRecord accumulation.
+positions), tree resolution, both training reducers, the progression ladder and the
+review scheduler (interval growth, lapses, interleaving, frozen session snapshots),
+sample-content validity (every authored SAN must be legal or the test fails), and
+TrainingRecord accumulation including legacy-blob decoding.
 
 ## Authoring a repertoire
 
@@ -136,3 +159,6 @@ Deferred on purpose, in rough order:
   tree-node id is structured precisely as that feature's input.
 - **Dynamic intent fading.** Guided prompts that gradually drop the name as recall
   strengthens, converging on Phase 2 naturally.
+- **Per-move spacing.** The review ladder currently works line-by-line — the honest
+  unit while repertoires stay small. Per-node scheduling (each move on its own clock)
+  is a natural refinement once `missCounts` has enough history to justify it.

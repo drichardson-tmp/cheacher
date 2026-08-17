@@ -101,6 +101,38 @@ class GuidedSessionTest {
     }
 
     @Test
+    fun gatedSessionWalksOnlyTheAllowedLines() {
+        // Progression hands the session just the Sicilian line (index 1).
+        var state = GuidedState.start(tree, lineIndices = listOf(1))
+        assertEquals(1, state.progress.lineCount, "locked lines are not on this syllabus")
+        assertEquals("King's Pawn Opening", state.prompt?.name, "the shared prefix is still walked")
+
+        state = state.submit(move("e2e4")).submit(move("c7c5")).submit(move("g1f3"))
+        assertTrue(state.finished, "the session ends without ever visiting the locked line")
+        assertEquals(GuidedEvent.SessionComplete, state.lastEvent)
+        assertEquals(listOf(1), state.lineIndices, "the gate survives every transition")
+    }
+
+    @Test
+    fun gatedSessionNeverPromptsALockedLine() {
+        var state = GuidedState.start(tree, lineIndices = listOf(0))
+        val prompted = mutableListOf<String>()
+        for (uci in listOf("e2e4", "e7e5", "g1f3")) {
+            prompted += assertNotNull(state.expected).id
+            state = state.submit(move(uci))
+        }
+        assertTrue(state.finished)
+        assertEquals(listOf("0", "0.0", "0.0.0"), prompted, "no node of line 1 was ever expected")
+    }
+
+    @Test
+    fun emptyGateFinishesImmediately() {
+        val state = GuidedState.start(tree, lineIndices = emptyList())
+        assertTrue(state.finished)
+        assertNull(state.prompt)
+    }
+
+    @Test
     fun promptCarriesMoverAndMoveNumber() {
         val state = GuidedState.start(tree).submit(move("e2e4"))
         val prompt = assertNotNull(state.prompt)

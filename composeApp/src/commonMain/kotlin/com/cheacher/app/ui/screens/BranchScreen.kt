@@ -31,7 +31,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.cheacher.app.training.MistakePolicy
 import com.cheacher.app.ui.board.ChessBoardView
-import com.cheacher.app.ui.theme.Ink
+import com.cheacher.app.ui.theme.CheacherTheme
 import com.cheacher.app.ui.theme.Motion
 import com.cheacher.app.ui.tree.VariationTreeView
 
@@ -51,6 +51,7 @@ fun BranchScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val shakes by viewModel.wrongShakes.collectAsStateWithLifecycle()
     val flashes by viewModel.closeFlashes.collectAsStateWithLifecycle()
+    val unlock by viewModel.unlock.collectAsStateWithLifecycle()
     val perspective = state.tree.repertoire.perspective
 
     // Green wash when a branch closes out.
@@ -89,8 +90,10 @@ fun BranchScreen(
         LinearProgressIndicator(
             progress = { progressFraction },
             modifier = Modifier.fillMaxWidth(),
-            color = if (state.progress.failedLines > 0) Ink.brass else MaterialTheme.colorScheme.tertiary,
+            color = if (state.progress.failedLines > 0) CheacherTheme.colors.streakBrass else MaterialTheme.colorScheme.tertiary,
         )
+
+        UnlockBannerCard(banner = unlock, onDismiss = viewModel::dismissUnlock)
 
         if (state.finished) {
             val failed = state.progress.failedLines
@@ -120,7 +123,7 @@ fun BranchScreen(
                 Modifier
                     .matchParentSize()
                     .alpha(flash.value)
-                    .background(Ink.leafBright, RoundedCornerShape(10.dp)),
+                    .background(CheacherTheme.colors.verdictCorrect, RoundedCornerShape(10.dp)),
             )
         }
 

@@ -29,7 +29,11 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -37,6 +41,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.cheacher.app.chess.Color as ChessColor
 import com.cheacher.app.domain.TreeNode
 import com.cheacher.app.ui.board.ChessBoardView
+import com.cheacher.app.ui.theme.CheacherTheme
+import com.cheacher.app.ui.theme.Motion
+import kotlinx.coroutines.delay
 
 /**
  * Phase 1 — the name *is* the prompt.
@@ -49,9 +56,12 @@ import com.cheacher.app.ui.board.ChessBoardView
 fun GuidedScreen(
     viewModel: GuidedViewModel,
     onBack: () -> Unit,
+    /** Absolute line indices that are reviews on today's syllabus — marked, never blocked. */
+    reviewLineIndices: Set<Int> = emptySet(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val shakes by viewModel.wrongShakes.collectAsStateWithLifecycle()
+    val unlock by viewModel.unlock.collectAsStateWithLifecycle()
     val perspective = state.tree.repertoire.perspective
 
     Column(
@@ -64,12 +74,19 @@ fun GuidedScreen(
         Row(verticalAlignment = Alignment.CenterVertically) {
             TextButton(onClick = onBack) { Text("← Shelf") }
             Spacer(Modifier.weight(1f))
+            // The one-word marker that this line is retrieval practice, not news.
+            val absoluteLine = state.lineIndices?.getOrNull(state.lineIndex)
+            val isReview = absoluteLine != null && absoluteLine in reviewLineIndices
             Text(
-                "Line ${state.progress.lineNumber} of ${state.progress.lineCount}",
+                "Line ${state.progress.lineNumber} of ${state.progress.lineCount}" +
+                    if (isReview) " · review" else "",
                 style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                // Review lines are marked in the cool wash — retrieval practice, not news.
+                color = if (isReview) CheacherTheme.colors.reviewTint else MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
+
+        UnlockBannerCard(banner = unlock, onDismiss = viewModel::dismissUnlock)
 
         if (state.finished) {
             SessionCompleteCard(
@@ -173,6 +190,51 @@ fun MoveStrip(played: List<TreeNode>, modifier: Modifier = Modifier) {
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurface,
             )
+        }
+    }
+}
+
+/**
+ * The "new branch unlocked" moment: a brass card that settles in when a session's
+ * completions move the progression frontier, names the fork it opened, and slips away
+ * on its own. Time-boxed here in the UI — the reducers and watchers stay clockless.
+ */
+@Composable
+fun UnlockBannerCard(banner: UnlockBanner?, onDismiss: () -> Unit) {
+    // Keep the last real banner so the card can animate out after dismissal.
+    var latest by remember { mutableStateOf(banner) }
+    if (banner != null) latest = banner
+
+    LaunchedEffect(banner?.serial) {
+        if (banner != null) {
+            delay(4_000)
+            onDismiss()
+        }
+    }
+
+    AnimatedVisibility(
+        visible = banner != null,
+        enter = expandVertically(animationSpec = Motion.settle()) + fadeIn(),
+        exit = shrinkVertically() + fadeOut(),
+    ) {
+        val advance = latest?.advance ?: return@AnimatedVisibility
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.secondary,
+                contentColor = MaterialTheme.colorScheme.onSecondary,
+            ),
+        ) {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    if (advance.repertoireMastered) "REPERTOIRE MASTERED" else "NEW BRANCH UNLOCKED",
+                    style = MaterialTheme.typography.labelSmall,
+                )
+                Text(
+                    advance.unlockedLine?.name ?: "Every branch is open.",
+                    style = MaterialTheme.typography.headlineSmall,
+                )
+            }
         }
     }
 }
