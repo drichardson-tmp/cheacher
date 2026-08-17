@@ -31,7 +31,7 @@ import androidx.compose.ui.unit.dp
 import com.cheacher.app.domain.OpeningTree
 import com.cheacher.app.domain.TreeNode
 import com.cheacher.app.training.NodeStatus
-import com.cheacher.app.ui.theme.Ink
+import com.cheacher.app.ui.theme.CheacherTheme
 import com.cheacher.app.ui.theme.Motion
 
 /**
@@ -89,24 +89,32 @@ private fun NodeChip(
     isCursor: Boolean,
     modifier: Modifier = Modifier,
 ) {
+    val colors = CheacherTheme.colors
     val fill by animateColorAsState(
         targetValue = when (status) {
-            NodeStatus.UNVISITED -> MaterialTheme.colorScheme.surfaceVariant
-            NodeStatus.IN_PROGRESS -> MaterialTheme.colorScheme.primaryContainer
-            NodeStatus.COMPLETED -> Ink.leaf
-            NodeStatus.FAILED -> Ink.madder
+            NodeStatus.UNVISITED -> colors.treeUnvisited
+            NodeStatus.IN_PROGRESS -> colors.treeInProgress
+            NodeStatus.COMPLETED -> colors.treeCompleted
+            NodeStatus.FAILED -> colors.treeFailed
+            NodeStatus.LOCKED -> colors.lockedGhost
         },
         animationSpec = Motion.fade(),
         label = "fill-${node.id}",
     )
+    // Three depths of presence: live branches at full ink, closed ones dimmed into
+    // history, locked ones barely on the paper at all — a promise, not a task.
     val alpha by animateFloatAsState(
-        targetValue = if (status.isClosed) 0.45f else 1f,
+        targetValue = when {
+            status == NodeStatus.LOCKED -> 0.22f
+            status.isClosed -> 0.45f
+            else -> 1f
+        },
         animationSpec = Motion.fade(),
         label = "alpha-${node.id}",
     )
     val onFill = when (status) {
-        NodeStatus.COMPLETED, NodeStatus.FAILED -> Color.White
-        else -> MaterialTheme.colorScheme.onSurface
+        NodeStatus.COMPLETED, NodeStatus.FAILED -> colors.onVerdict
+        else -> colors.treeOpenText
     }
     val label = when {
         status == NodeStatus.COMPLETED && node.isLeaf -> "${node.san} ✓"
@@ -119,7 +127,7 @@ private fun NodeChip(
             .background(fill, RoundedCornerShape(7.dp))
             .then(
                 if (isCursor) {
-                    Modifier.border(2.dp, Ink.brassBright, RoundedCornerShape(7.dp))
+                    Modifier.border(2.dp, colors.streakBrass, RoundedCornerShape(7.dp))
                 } else {
                     Modifier
                 },
@@ -162,13 +170,19 @@ private fun Connectors(
         fun rightEdge(slot: Slot) = Offset(slot.column * (cw + hg) + cw, slot.row * (ch + vg) + ch / 2)
         fun leftEdge(slot: Slot) = Offset(slot.column * (cw + hg), slot.row * (ch + vg) + ch / 2)
 
+        fun linkAlpha(child: TreeNode): Float = when {
+            statusOf(child) == NodeStatus.LOCKED -> 0.12f
+            statusOf(child).isClosed -> 0.3f
+            else -> 0.8f
+        }
+
         for (node in tree.allNodes) {
             for (child in node.children) {
                 drawLink(
                     from = rightEdge(layout.slotOf(node.id)),
                     to = leftEdge(layout.slotOf(child.id)),
                     color = lineColor,
-                    dim = statusOf(child).isClosed,
+                    alpha = linkAlpha(child),
                 )
             }
         }
@@ -180,7 +194,7 @@ private fun Connectors(
                     from = Offset(first.x - hg / 2, first.y),
                     to = leftEdge(layout.slotOf(child.id)),
                     color = lineColor,
-                    dim = statusOf(child).isClosed,
+                    alpha = linkAlpha(child),
                 )
             }
         }
@@ -191,14 +205,14 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawLink(
     from: Offset,
     to: Offset,
     color: Color,
-    dim: Boolean,
+    alpha: Float,
 ) {
     val path = Path().apply {
         moveTo(from.x, from.y)
         val midX = (from.x + to.x) / 2
         cubicTo(midX, from.y, midX, to.y, to.x, to.y)
     }
-    drawPath(path, color = color.copy(alpha = if (dim) 0.3f else 0.8f), style = Stroke(width = 2f))
+    drawPath(path, color = color.copy(alpha = alpha), style = Stroke(width = 2f))
 }
 
 // ------------------------------------------------------------------------ layout

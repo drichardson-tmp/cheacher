@@ -18,6 +18,13 @@ import com.cheacher.app.domain.TreeNode
  */
 data class GuidedState(
     val tree: OpeningTree,
+    /**
+     * Which of [OpeningTree.lines] this session walks, in order. Null means the whole
+     * book; progression mode passes the frontier line so the session is "replay the
+     * shared prefix you know, then learn the new fork". Chosen at [start] and immutable
+     * after — a session's syllabus does not change under the learner's feet.
+     */
+    val lineIndices: List<Int>? = null,
     val lineIndex: Int = 0,
     val plyIndex: Int = 0,
     /** True once the human-language hint has been unlocked for the current move. */
@@ -26,8 +33,9 @@ data class GuidedState(
     val lastEvent: GuidedEvent? = null,
     val finished: Boolean = false,
 ) {
-    /** All root-to-leaf paths, in authored order. */
-    val lines: List<List<TreeNode>> get() = tree.lines
+    /** The lines this session walks, in authored order. */
+    val lines: List<List<TreeNode>>
+        get() = lineIndices?.map { tree.lines[it] } ?: tree.lines
 
     val currentLine: List<TreeNode> get() = lines.getOrElse(lineIndex) { emptyList() }
 
@@ -60,7 +68,11 @@ data class GuidedState(
         )
 
     companion object {
-        fun start(tree: OpeningTree): GuidedState = GuidedState(tree = tree, finished = tree.lines.isEmpty())
+        /** [lineIndices] restricts the session to those lines; null walks the whole book. */
+        fun start(tree: OpeningTree, lineIndices: List<Int>? = null): GuidedState {
+            val state = GuidedState(tree = tree, lineIndices = lineIndices)
+            return state.copy(finished = state.lines.isEmpty())
+        }
     }
 }
 

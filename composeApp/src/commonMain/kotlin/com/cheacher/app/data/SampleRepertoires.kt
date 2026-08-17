@@ -12,9 +12,39 @@ import com.cheacher.app.domain.repertoire
  * here fails the build, not the learner.
  */
 object SampleRepertoires {
-    val all: List<Repertoire> by lazy { listOf(italianGame, sicilianCrossroads) }
+    val all: List<Repertoire> by lazy { listOf(kingsPawn, italianGame, sicilianCrossroads) }
 
     fun byId(id: String): Repertoire = all.first { it.id == id }
+
+    /**
+     * The on-ramp: 1. e4 and the very first crossroads, kept deliberately shallow.
+     * The main road runs through the Open Game to the Italian and Ruy Lopez first
+     * moves; the Sicilian and French lines are one-fork stubs that point at the
+     * deeper repertoires further down the shelf.
+     */
+    val kingsPawn: Repertoire = repertoire(
+        id = "kings-pawn",
+        title = "King's Pawn Openings",
+        perspective = Color.WHITE,
+        subtitle = "1. e4 and the first crossroads",
+    ) {
+        move("e4", "King's Pawn Opening", "Stakes the centre and frees the bishop and queen in one stroke.") {
+            move("e5", "Open Game", "Black answers symmetrically and contests the centre head-on.") {
+                move("Nf3", "King's Knight Opening", "Develops with tempo by attacking the e5 pawn.") {
+                    move("Nc6", "Normal Variation", "Defends e5 with a developing move rather than a pawn.") {
+                        move("Bc4", "Italian Game", "Aims the bishop at f7, the weakest square in Black's camp.")
+                        move("Bb5", "Ruy Lopez", "Pressures the knight that guards e5, asking Black a question that lasts all game.")
+                    }
+                }
+            }
+            move("c5", "Sicilian Defence", "Fights for d4 from the wing, refusing the symmetry of 1...e5.") {
+                move("Nf3", "Open Sicilian, Preparation", "Develops and prepares d4, the pawn break that defines the Open Sicilian.")
+            }
+            move("e6", "French Defence", "A modest pawn move that prepares ...d5 and a counterpunch at White's centre.") {
+                move("d4", "French Defence, Normal Variation", "Takes the full centre while it is on offer; Black will strike back with ...d5.")
+            }
+        }
+    }
 
     /**
      * A White repertoire around the Italian bishop: the quiet Pianissimo squeeze,

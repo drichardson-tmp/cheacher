@@ -62,14 +62,89 @@ class TrainingRecordTest {
     }
 
     @Test
+    fun branchCompletionsCountInBothMaps() {
+        val record = TrainingRecord.empty("x")
+            .recordLineCompleted("0.0.0") // guided walk
+            .recordBranchLineCompleted("0.0.0", atEpochMillis = 10L) // branch recall
+            .recordBranchLineCompleted("0.1.0", atEpochMillis = 20L)
+        assertEquals(mapOf("0.0.0" to 2, "0.1.0" to 1), record.lineCompletions, "still the all-modes total")
+        assertEquals(mapOf("0.0.0" to 1, "0.1.0" to 1), record.branchLineCompletions)
+        assertEquals(1, record.guidedCompletionsOf("0.0.0"))
+        assertEquals(1, record.branchCompletionsOf("0.0.0"))
+        assertEquals(0, record.guidedCompletionsOf("0.1.0"), "branch-only lines have no guided credit")
+    }
+
+    @Test
+    fun legacyRecordWithoutBranchMapStillDecodes() {
+        // A blob written before branch_line_completions existed: it must decode, and its
+        // completions must all read as guided — nothing unlocks for free, nothing is lost.
+        val json = Json { ignoreUnknownKeys = true }
+        val blob = """{"repertoire_id":"italian","line_completions":{"0.0.0":3},"guided_sessions_completed":2}"""
+        val record = json.decodeFromString<TrainingRecord>(blob)
+        assertEquals(emptyMap(), record.branchLineCompletions)
+        assertEquals(3, record.guidedCompletionsOf("0.0.0"))
+        assertEquals(0, record.branchCompletionsOf("0.0.0"))
+    }
+
+    @Test
     fun recordSurvivesJsonRoundTrip() {
         val json = Json { ignoreUnknownKeys = true }
         val record = TrainingRecord.empty("sicilian")
             .recordSessionStart(42L, MistakePolicy.STRICT)
             .recordMiss("0.0")
             .recordLineCompleted("0.0.1")
+            .recordBranchLineCompleted("0.0.1", atEpochMillis = 43L)
             .recordBranchSessionCompleted(cleanSweep = false)
         assertEquals(record, json.decodeFromString<TrainingRecord>(json.encodeToString(record)))
+    }
+
+    @Test
+    fun branchCompletionsGrowTheReviewStreak() {
+        val record = TrainingRecord.empty("x")
+            .recordBranchLineCompleted("0.0.0", atEpochMillis = 100L)
+            .recordBranchLineCompleted("0.0.0", atEpochMillis = 200L)
+        assertEquals(LineReview(lastReviewedAt = 200L, streak = 2), record.lineReviews["0.0.0"])
+        assertEquals(2, record.reviewStreakOf("0.0.0"))
+        assertEquals(0, record.reviewStreakOf("0.1.0"), "unreviewed lines have no streak")
+    }
+
+    @Test
+    fun lapseResetsTheStreakButKeepsTheTimestamp() {
+        val record = TrainingRecord.empty("x")
+            .recordBranchLineCompleted("0.0.0", atEpochMillis = 100L)
+            .recordBranchLineCompleted("0.0.0", atEpochMillis = 200L)
+            .recordLineLapsed("0.0.0")
+        assertEquals(LineReview(lastReviewedAt = 200L, streak = 0), record.lineReviews["0.0.0"])
+        assertEquals(
+            TrainingRecord.empty("x"),
+            TrainingRecord.empty("x").recordLineLapsed("0.0.0"),
+            "lapsing a line with no history is a no-op",
+        )
+    }
+
+    @Test
+    fun legacyRecordWithoutLineReviewsStillDecodes() {
+        // A blob written before spacing existed: mastered lines simply have no review
+        // history, which the scheduler reads as top review priority.
+        val json = Json { ignoreUnknownKeys = true }
+        val blob = """{"repertoire_id":"italian","line_completions":{"0.0.0":3},"branch_line_completions":{"0.0.0":1}}"""
+        val record = json.decodeFromString<TrainingRecord>(blob)
+        assertEquals(emptyMap(), record.lineReviews)
+        assertEquals(0, record.reviewStreakOf("0.0.0"))
+    }
+
+    @Test
+    fun dayStreakCountsConsecutiveDaysAndForgivesAnUnplayedToday() {
+        val day = TrainingRecord.DAY_MILLIS
+        val record = TrainingRecord.empty("x")
+            .recordSessionStart(1 * day + 5)
+            .recordSessionStart(2 * day + 5)
+            .recordSessionStart(2 * day + 900) // two sessions in one day count once
+            .recordSessionStart(3 * day + 5)
+        assertEquals(3, record.dayStreak(3 * day + 999), "practised today: streak runs through today")
+        assertEquals(3, record.dayStreak(4 * day + 5), "not yet practised today: yesterday's streak lives")
+        assertEquals(0, record.dayStreak(5 * day + 5), "a skipped day ends the streak")
+        assertEquals(0, TrainingRecord.empty("y").dayStreak(nowEpochMillis = 0L))
     }
 
     @Test
