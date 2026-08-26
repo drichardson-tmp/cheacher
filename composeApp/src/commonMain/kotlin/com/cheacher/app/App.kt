@@ -119,11 +119,6 @@ class RootViewModel(val progress: ProgressStore) : ViewModel() {
     /** Monotonic deal counter — consecutive deals of the same opening must still be new screens. */
     private var dealSerial = 0
 
-    init {
-        // Straight to the board: the app opens mid-study, never on a menu.
-        deal()
-    }
-
     private val _policy = MutableStateFlow(MistakePolicy.STRICT)
     val policy: StateFlow<MistakePolicy> = _policy.asStateFlow()
 
@@ -139,6 +134,14 @@ class RootViewModel(val progress: ProgressStore) : ViewModel() {
 
     /** Journal writes still in flight — navigation waits for zero so syllabi never lag truth. */
     private val pendingJournalWrites = MutableStateFlow(0)
+
+    init {
+        // Straight to the board: the app opens mid-study, never on a menu. This block
+        // sits below every property deal() touches — viewModelScope.launch on the
+        // immediate main dispatcher runs the coroutine body during construction, so an
+        // earlier init would read pendingJournalWrites before it exists.
+        deal()
+    }
 
     fun tree(id: String): OpeningTree = trees.first { it.repertoire.id == id }
 
