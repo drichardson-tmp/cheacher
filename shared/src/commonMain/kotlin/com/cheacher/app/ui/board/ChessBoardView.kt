@@ -149,13 +149,24 @@ fun ChessBoardView(
 
         // Null off the board: a drag released past the edge is a cancelled move, not a
         // move to the nearest edge square.
+        //
+        // Reads [flipDegrees] at call time (not the values captured above) because
+        // gesture handlers outlive the composition that created them: mid-turn, hits
+        // must map through the same animated rotation the pieces are drawn with, or a
+        // tap on a visibly moving piece lands on a different logical square. Undoing
+        // the rotation puts the point in the white-orientation frame, so no
+        // per-orientation branch remains — at rest, 0° and 180° are exactly the old
+        // white and black mappings.
         fun squareAt(point: Offset): Int? {
-            val x = (point.x / squarePx).toInt()
-            val y = (point.y / squarePx).toInt()
+            val radians = flipDegrees * (PI.toFloat() / 180f)
+            val c = cos(radians)
+            val s = sin(radians)
+            val px = point.x - boardPx / 2
+            val py = point.y - boardPx / 2
+            val x = ((px * c + py * s + boardPx / 2) / squarePx).toInt()
+            val y = ((-px * s + py * c + boardPx / 2) / squarePx).toInt()
             if (x !in 0..7 || y !in 0..7) return null
-            val file = if (orientation == ChessColor.WHITE) x else 7 - x
-            val rank = if (orientation == ChessColor.WHITE) 7 - y else y
-            return Squares.of(file, rank)
+            return Squares.of(x, 7 - y)
         }
 
         val coordinateLayouts = rememberCoordinateLayouts(textMeasurer, squarePx)
