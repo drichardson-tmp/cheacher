@@ -40,9 +40,8 @@ class OpeningEntryTest {
 
     private fun move(uci: String): Move = assertNotNull(Move.fromUci(uci))
 
-    private fun recordWithCleanLine(tree: OpeningTree): TrainingRecord =
-        TrainingRecord.empty(tree.repertoire.id)
-            .recordLineCredit(tree.lines.first().last().id, 1.0)
+    private fun withRoadInProven(tree: OpeningTree): TrainingRecord =
+        TrainingRecord.empty(tree.repertoire.id).recordTrunkCleared()
 
     @Test
     fun trunkIsTheSharedRoadIn() {
@@ -65,23 +64,22 @@ class OpeningEntryTest {
     }
 
     @Test
-    fun theRoadInIsWalkedUntilOneLineReadsClean() {
+    fun theRoadInIsWalkedUntilItIsWalkedPerfectly() {
         val fresh = OpeningEntry(italian, TrainingRecord.empty("italianish"))
         assertFalse(fresh.proven)
         assertEquals(0, fresh.entryPly)
         assertNull(fresh.entryNode)
 
-        // Half credit is a hinted walk: it proves the names were shown, not that they were found.
-        val hinted = OpeningEntry(
-            italian,
-            TrainingRecord.empty("italianish").recordLineCredit(italian.lines[0].last().id, 0.5),
-        )
-        assertFalse(hinted.proven, "an aided walk does not pay the toll")
+        // Finishing lines is the study, not the toll: credits alone open nothing.
+        val studied = TrainingRecord.empty("italianish")
+            .recordLineCredit(italian.lines[0].last().id, 1.0)
+            .recordLineCompleted(italian.lines[0].last().id)
+        assertFalse(OpeningEntry(italian, studied).proven, "the road in is what is asked for")
     }
 
     @Test
-    fun oneCleanWalkOpensTheDoorForEveryOtherLine() {
-        val entry = OpeningEntry(italian, recordWithCleanLine(italian))
+    fun gettingThereCleanlyIsTheWholeToll() {
+        val entry = OpeningEntry(italian, withRoadInProven(italian))
         assertTrue(entry.proven)
         assertEquals(5, entry.entryPly)
         assertEquals("Italian Game", entry.entryName)
@@ -89,10 +87,14 @@ class OpeningEntryTest {
     }
 
     @Test
-    fun aFumbledRewalkHandsBackTheWholeRoad() {
-        val lapsed = recordWithCleanLine(italian)
-            .recordLineCredit(italian.lines.first().last().id, 0.0)
-        assertFalse(OpeningEntry(italian, lapsed).proven, "no line reads clean any more")
+    fun aFumbleOnTheRoadInHandsTheWholeRoadBack() {
+        val lapsed = withRoadInProven(italian).recordTrunkCleared().recordTrunkFumbled()
+        assertEquals(0, lapsed.trunkClears, "a stumble revokes outright, it does not decrement")
+        assertFalse(OpeningEntry(italian, lapsed).proven)
+        assertTrue(
+            OpeningEntry(italian, lapsed.recordTrunkCleared()).proven,
+            "re-earning costs one clean walk, same as the first time",
+        )
     }
 
     @Test
@@ -177,10 +179,7 @@ class OpeningEntryTest {
             },
         )
         assertTrue(forked.trunk().isEmpty())
-        val entry = OpeningEntry(
-            forked,
-            TrainingRecord.empty("forked").recordLineCredit(forked.lines[0].last().id, 1.0),
-        )
+        val entry = OpeningEntry(forked, TrainingRecord.empty("forked").recordTrunkCleared())
         assertFalse(entry.proven, "there is no shared road to have earned")
         assertEquals(0, entry.entryPly)
         assertNull(entry.entryName)
@@ -194,13 +193,9 @@ class OpeningEntryTest {
     }
 
     @Test
-    fun anyCleanLinePaysTheToll() {
-        val lastLine = TrainingRecord.empty("italianish")
-            .recordLineCredit(italian.lines.last().last().id, 1.0)
-        assertTrue(
-            OpeningEntry(italian, lastLine).proven,
-            "the road in is the same road whichever line proved it",
-        )
+    fun aFumbleOnANeverEarnedRoadChangesNothing() {
+        val fresh = TrainingRecord.empty("italianish")
+        assertEquals(fresh, fresh.recordTrunkFumbled(), "you cannot lose what you never held")
     }
 
     @Test
@@ -213,18 +208,15 @@ class OpeningEntryTest {
                 }
             },
         )
-        val entry = OpeningEntry(
-            unnamed,
-            TrainingRecord.empty("unnamed").recordLineCredit(unnamed.lines[0].last().id, 1.0),
-        )
+        val entry = OpeningEntry(unnamed, TrainingRecord.empty("unnamed").recordTrunkCleared())
         assertEquals("0", assertNotNull(entry.entryNode).id)
         assertNull(entry.entryName, "a blank name is not a name")
     }
 
     @Test
     fun theEarnedEntryIsWhatAGuidedSessionOpensOn() {
-        // The round trip the app makes: one clean walk, then the next session's start.
-        val entry = OpeningEntry(italian, recordWithCleanLine(italian))
+        // The round trip the app makes: one clean walk in, then the next session's start.
+        val entry = OpeningEntry(italian, withRoadInProven(italian))
         val next = GuidedState.start(italian, entryPly = entry.entryPly)
         assertEquals("Italian Game", next.played.last().name)
         assertEquals("Giuoco Piano", next.prompt?.name)
@@ -345,5 +337,140 @@ class OpeningEntryTest {
             .submit(move("c2c3"))
         val event = assertIs<BranchEvent.BranchClosed>(closed.lastEvent)
         assertEquals("0.0.0.0.0", event.snappedTo?.id, "the fork is still the nearest open junction")
+    }
+
+    @Test
+    fun guidedPaysTheTollOnArrivalNotOnFinishingTheLine() {
+        var state = GuidedState.start(italian)
+        assertEquals(5, state.trunkPly)
+        assertFalse(state.roadInWalkedClean, "nothing walked yet")
+
+        listOf("e2e4", "e7e5", "g1f3", "b8c6").forEach { state = state.submit(move(it)) }
+        assertFalse(state.roadInWalkedClean, "one move short of the Italian is not there yet")
+
+        state = state.submit(move("f1c4"))
+        assertTrue(state.roadInWalkedClean, "arrival is the toll — the fork is still unplayed")
+        assertEquals("Giuoco Piano", state.prompt?.name)
+    }
+
+    @Test
+    fun aMissOnTheRoadInWithholdsTheToll() {
+        var state = GuidedState.start(italian).submit(move("d2d4")) // not the book's first move
+        listOf("e2e4", "e7e5", "g1f3", "b8c6", "f1c4").forEach { state = state.submit(move(it)) }
+        assertFalse(state.roadInWalkedClean, "a stumble on the way in is not a clean arrival")
+
+        // The next line's walk is its own fresh run at the road.
+        var second = state.submit(move("f8c5")).submit(move("c2c3"))
+        listOf("e2e4", "e7e5", "g1f3", "b8c6", "f1c4").forEach { second = second.submit(move(it)) }
+        assertTrue(second.roadInWalkedClean)
+    }
+
+    @Test
+    fun aHintOnTheRoadInWithholdsTheTollToo() {
+        var state = GuidedState.start(italian).revealIdea()
+        listOf("e2e4", "e7e5", "g1f3", "b8c6", "f1c4").forEach { state = state.submit(move(it)) }
+        assertFalse(state.roadInWalkedClean, "shown is not found")
+    }
+
+    @Test
+    fun aSlipAfterArrivalDoesNotUnpayTheToll() {
+        var state = GuidedState.start(italian)
+        listOf("e2e4", "e7e5", "g1f3", "b8c6", "f1c4").forEach { state = state.submit(move(it)) }
+        assertTrue(state.roadInWalkedClean, "arrived clean — the toll is paid and journalled")
+        val slipped = state.submit(move("g8f6")) // wrong for this line, but past the road in
+        assertFalse(
+            slipped.roadInWalkedClean,
+            "the flag tracks the walk in progress; the paid toll already left as a record write",
+        )
+    }
+
+    @Test
+    fun aBookWithNoRoadInNeverPaysAToll() {
+        val forked = OpeningTree.resolve(
+            repertoire("forked", "Forked", Color.WHITE) {
+                move("e4", "King's Pawn Opening") { move("e5", "Open Game") }
+                move("d4", "Queen's Pawn Opening") { move("d5", "Closed Game") }
+            },
+        )
+        val state = GuidedState.start(forked).submit(move("e2e4"))
+        assertEquals(0, state.trunkPly)
+        assertFalse(state.roadInWalkedClean, "there is no shared road to have walked")
+    }
+
+    @Test
+    fun blindRecallPaysTheTollOnArrivalAsWell() {
+        var state = BranchState.start(italian)
+        assertEquals("0.0.0.0.0", state.trunkLastId)
+        listOf("e2e4", "e7e5", "g1f3", "b8c6").forEach { state = state.submit(move(it)) }
+        assertFalse(state.roadInCleared)
+
+        state = state.submit(move("f1c4"))
+        assertTrue(state.roadInCleared, "reaching the Italian blind is the toll, lines or no lines")
+        assertEquals(0, state.progress.closedLines, "and nothing has been pruned yet")
+    }
+
+    @Test
+    fun aWrongMoveOnTheWayInCostsTheRecallToll() {
+        val fumbled = BranchState.start(italian).submit(move("d2d4"))
+        assertTrue(fumbled.roadInFumbled)
+        var state = fumbled
+        listOf("e2e4", "e7e5", "g1f3", "b8c6", "f1c4").forEach { state = state.submit(move(it)) }
+        assertFalse(state.roadInCleared, "the first line's walk in was not clean")
+    }
+
+    @Test
+    fun aFumbledWalkInSpoilsTheWholeRound() {
+        // A recall round walks the road in once — later lines rejoin at the fork — so a
+        // stumble on the way costs this round's toll, not just this line's.
+        var state = BranchState.start(italian).submit(move("d2d4"))
+        assertTrue(state.roadInFumbled)
+        assertNull(state.cursorId, "still at the starting position; no line was spent")
+        listOf("e2e4", "e7e5", "g1f3", "b8c6", "f1c4").forEach { state = state.submit(move(it)) }
+        assertFalse(state.roadInCleared, "the round's one walk in was not clean")
+
+        // The next round is a clean slate.
+        var fresh = BranchState.start(italian)
+        listOf("e2e4", "e7e5", "g1f3", "b8c6", "f1c4").forEach { fresh = fresh.submit(move(it)) }
+        assertTrue(fresh.roadInCleared)
+    }
+
+    @Test
+    fun aMissPastTheOpeningNeverCostsTheRoadIn() {
+        var state = BranchState.start(italian)
+        listOf("e2e4", "e7e5", "g1f3", "b8c6", "f1c4").forEach { state = state.submit(move(it)) }
+        val slipped = state.submit(move("g8h6"))
+        assertIs<BranchEvent.BranchFailed>(slipped.lastEvent)
+        assertFalse(slipped.roadInFumbled, "the stumble was inside the opening, not on the way")
+        assertTrue(slipped.roadInCleared)
+    }
+
+    @Test
+    fun aForgivenMissOnTheWayInStillCostsTheToll() {
+        val missed = BranchState.start(italian, policy = MistakePolicy.ONE_ALLOWANCE)
+            .submit(move("d2d4"))
+        assertIs<BranchEvent.Missed>(missed.lastEvent)
+        assertTrue(missed.roadInFumbled, "forgiven on the board is not proven on the road")
+        assertEquals(2, missed.progress.totalLines, "and no line was spent on it")
+    }
+
+    @Test
+    fun theRoadInIsNotWalkedAtAllOnceItIsEarned() {
+        val state = BranchState.start(italian, entryNodeId = "0.0.0.0.0")
+        assertFalse(state.roadInCleared, "nothing to prove — the round opens past it")
+        assertFalse(state.roadInFumbled)
+    }
+
+    @Test
+    fun theRoadInAskIsOnlyForMovesBeforeTheFork() {
+        assertTrue(italian.isReachingForRoadIn(null), "the very first move is the way in")
+        assertTrue(italian.isReachingForRoadIn(TrainingRecord.ROOT_NODE_KEY))
+        assertTrue(italian.isReachingForRoadIn("0.0.0.0"), "3.Bc4 is still the way in")
+        assertFalse(
+            italian.isReachingForRoadIn("0.0.0.0.0"),
+            "standing on the Italian bishop, the next move is the opening itself",
+        )
+        assertFalse(italian.isReachingForRoadIn("0.0.0.0.0.0"))
+        assertFalse(tiny.isReachingForRoadIn("0"), "tiny forks straight after 1.e4")
+        assertEquals(setOf("0"), tiny.trunkNodeIds())
     }
 }

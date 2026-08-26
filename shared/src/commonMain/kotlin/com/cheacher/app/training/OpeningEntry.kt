@@ -29,28 +29,26 @@ fun OpeningTree.trunk(): List<TreeNode> {
  * and you are let in past it — sessions afterwards start *at* the Italian, with the
  * road in already on the move strip as context rather than as work.
  *
- * **The entry rule — one clean full iteration.** The trunk is proven once some line of
- * the book reads clean on its latest walk: [TrainingRecord.creditOf] of 1.0, which is
- * exactly "walked from the true starting position to a leaf, unaided, no misses". That
- * single fact carries both halves of the proof — you found your way *to* the opening,
- * and you went through one whole line *of* it.
+ * **The entry rule — get there perfectly, once.** The toll is the road in and nothing
+ * more: one walk down the trunk found unaided, no hint, no wrong move
+ * ([TrainingRecord.trunkClears]). What happens *after* the Italian bishop is the
+ * opening, and the opening is the thing you are here to study — being made to finish a
+ * whole line before you are trusted to arrive would charge for the wrong skill.
  *
- * It is earned, and it is losable in the same breath: credits are latest-wins, so a
- * fumbled walk drops that line back under 1.0 and, once no line reads clean, the book
- * hands you back the full road from move one. Nothing is stored for any of this — it is
- * derived from the same credits the score is drawn from, the same way [Progression] and
- * [OpeningStanding] derive their ladders.
+ * Losing it costs exactly one stumble on the road in, because the claim it stands on is
+ * "you can get here without thinking" and a stumble is the counter-example. Re-earning
+ * it costs one clean walk, the same as the first time.
  *
  * Spaced reviews deliberately ignore the entry (see `App`): a review asks whether you
- * still know the whole thing, and the whole thing includes getting there.
+ * still know the whole thing, and the whole thing includes getting there — which is
+ * also where an entry that has gone stale is caught and handed back.
  */
 class OpeningEntry(val tree: OpeningTree, val record: TrainingRecord) {
     /** The shared road in, whether or not it has been earned yet. */
     val trunk: List<TreeNode> = tree.trunk()
 
-    /** True once a full line has been walked clean and unaided — the toll is paid. */
-    val proven: Boolean =
-        trunk.isNotEmpty() && tree.lines.any { record.creditOf(it.last().id) >= 1.0 }
+    /** True once the road in has been walked perfectly — the toll is paid. */
+    val proven: Boolean = trunk.isNotEmpty() && record.trunkClears > 0
 
     /** The node sessions resume from, or null while the trunk is still being earned. */
     val entryNode: TreeNode? = if (proven) trunk.last() else null
@@ -60,4 +58,20 @@ class OpeningEntry(val tree: OpeningTree, val record: TrainingRecord) {
 
     /** The name to put on the entry — "Italian Game", the position sessions now open in. */
     val entryName: String? = entryNode?.name?.takeIf { it.isNotBlank() }
+}
+
+/** Ids of the shared road in, for asking whether a miss happened on the way to the opening. */
+fun OpeningTree.trunkNodeIds(): Set<String> = trunk().mapTo(mutableSetOf()) { it.id }
+
+/**
+ * True when the move still to be found *at* [nodeId] — null or
+ * [TrainingRecord.ROOT_NODE_KEY] meaning the starting position — is part of the road in.
+ * Standing on the trunk's last node the answer is false: the next move is the fork, and
+ * the fork is the opening rather than the way to it.
+ */
+fun OpeningTree.isReachingForRoadIn(nodeId: String?): Boolean {
+    val trunk = trunk()
+    if (trunk.isEmpty()) return false
+    if (nodeId == null || nodeId == TrainingRecord.ROOT_NODE_KEY) return true
+    return trunk.dropLast(1).any { it.id == nodeId }
 }

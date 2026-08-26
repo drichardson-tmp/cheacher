@@ -42,6 +42,11 @@ data class GuidedState(
      * how a book behaves until its road in has been earned.
      */
     val entryPly: Int = 0,
+    /**
+     * Length of the book's shared road in, whether or not it has been earned — the ply
+     * the current walk has to reach cleanly to pay the toll. See [OpeningEntry].
+     */
+    val trunkPly: Int = 0,
     val lineIndex: Int = 0,
     val plyIndex: Int = 0,
     /** True once the human-language hint has been unlocked for the current move. */
@@ -82,6 +87,16 @@ data class GuidedState(
             lineAided -> 0.5
             else -> 1.0
         }
+
+    /**
+     * True when the walk in progress has reached the opening proper without a hint or a
+     * wrong move — the entry toll, paid. Read as a transition (false → true) rather than
+     * as a fact: it is trivially true from the first move of a session that already
+     * starts inside the opening, and it goes false again the moment a later line is
+     * fumbled on its own way in.
+     */
+    val roadInWalkedClean: Boolean
+        get() = trunkPly > 0 && plyIndex >= trunkPly && !lineAided && !lineMissed
 
     /** Session score over the whole [deal] — "3½ of 6 learned" in the UI. */
     val sessionScore: Double get() = deal.sumOf { lineCredits[it] ?: 0.0 }
@@ -131,6 +146,7 @@ data class GuidedState(
                 masteryLoop = masteryLoop,
                 passLines = deal,
                 entryPly = entry,
+                trunkPly = tree.trunk().size,
                 plyIndex = entry,
                 finished = deal.isEmpty(),
             )

@@ -87,6 +87,27 @@ class TrainingRecordTest {
     }
 
     @Test
+    fun legacyRecordWithoutTrunkClearsStillDecodes() {
+        // A blob written before the opening entry existed: it decodes as "road in not yet
+        // proven", so the learner walks it once more and earns the entry back mid-session.
+        val json = Json { ignoreUnknownKeys = true }
+        val blob = """{"repertoire_id":"italian","line_credits":{"0.0.0":1.0}}"""
+        val record = json.decodeFromString<TrainingRecord>(blob)
+        assertEquals(0, record.trunkClears)
+        assertEquals(1, record.recordTrunkCleared().trunkClears)
+    }
+
+    @Test
+    fun theRoadInIsEarnedByWalkingItAndLostBySlippingOnIt() {
+        val proven = TrainingRecord.empty("italian").recordTrunkCleared().recordTrunkCleared()
+        assertEquals(2, proven.trunkClears, "every clean walk counts, for later analysis")
+        assertEquals(0, proven.recordTrunkFumbled().trunkClears, "one slip revokes it outright")
+
+        val fresh = TrainingRecord.empty("italian")
+        assertEquals(fresh, fresh.recordTrunkFumbled(), "nothing to lose, nothing written")
+    }
+
+    @Test
     fun recordSurvivesJsonRoundTrip() {
         val json = Json { ignoreUnknownKeys = true }
         val record = TrainingRecord.empty("sicilian")
@@ -95,6 +116,7 @@ class TrainingRecordTest {
             .recordLineCompleted("0.0.1")
             .recordBranchLineCompleted("0.0.1", atEpochMillis = 43L)
             .recordBranchSessionCompleted(cleanSweep = false)
+            .recordTrunkCleared()
             .copy(
                 moveDrill = MoveDrillRecord(
                     findMove = DrillRecord(rounds = 1, reps = 20, cleanReps = 18, lastMedianMillis = 900L),

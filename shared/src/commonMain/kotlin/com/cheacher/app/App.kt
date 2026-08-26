@@ -275,9 +275,10 @@ class RootViewModel(val progress: ProgressStore) : ViewModel() {
 
     /**
      * How deep a session opens into [tree]. LEARN sessions ride the earned entry — the
-     * road in was proven on the first clean line and replaying it before each of the next
-     * ten is toll, not practice. Reviews always start at move one: a review asks whether
-     * the whole thing still holds, and getting to the opening is part of the whole thing.
+     * road in was proven the first time it was walked perfectly, and replaying it before
+     * each of the next ten lines is toll, not practice. Reviews always start at move one:
+     * a review asks whether the whole thing still holds, and getting to the opening is
+     * part of the whole thing.
      *
      * "Show the full tree" opts out of every gate, this one included.
      */

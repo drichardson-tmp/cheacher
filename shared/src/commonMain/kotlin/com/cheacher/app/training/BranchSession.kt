@@ -66,6 +66,21 @@ data class BranchState(
      * the ordinary case: the round starts and re-forms at the true starting position.
      */
     val entryNodeId: String? = null,
+    /** The last node of the shared road in, or null when the book forks at move one. */
+    val trunkLastId: String? = null,
+    /** How many plies the road in runs for — a miss shallower than this is a miss on it. */
+    val trunkPly: Int = 0,
+    /**
+     * A wrong move on the way to the opening. Sticky for the round, because the round
+     * only ever walks the road in once — everything after the first line rejoins at the
+     * fork — so "this round's walk in was clean" is a question with a single answer.
+     */
+    val roadInFumbled: Boolean = false,
+    /**
+     * True once this round has walked the road in without a wrong move — the entry toll,
+     * paid blind. See [OpeningEntry]; the ViewModel journals the transition.
+     */
+    val roadInCleared: Boolean = false,
     val strikes: Int = 0,
     val lastEvent: BranchEvent? = null,
     val finished: Boolean = false,
@@ -153,6 +168,8 @@ data class BranchState(
                 policy = policy,
                 autoReplyFor = autoReplyFor,
                 entryNodeId = entry,
+                trunkLastId = trunk.lastOrNull()?.id,
+                trunkPly = trunk.size,
                 finished = tree.rootChildren.all { locked[it.id]?.isClosed == true },
             ).autoReply()
         }
@@ -211,9 +228,13 @@ fun BranchState.submit(move: Move): BranchState {
         statuses = statuses + (match.id to NodeStatus.IN_PROGRESS),
         strikes = 0,
         lastEvent = BranchEvent.Advanced(match),
-    )
+    ).markRoadIn(match)
     return if (match.isLeaf) advanced.close(match, NodeStatus.COMPLETED) else advanced.autoReply()
 }
+
+/** Arriving at the opening proper with a clean sheet pays the entry toll for this book. */
+private fun BranchState.markRoadIn(arrived: TreeNode): BranchState =
+    if (arrived.id == trunkLastId && !roadInFumbled) copy(roadInCleared = true) else this
 
 /** Plays the opponent's move for the learner when the session is set to one-sided practice. */
 private fun BranchState.autoReply(): BranchState {
@@ -230,7 +251,7 @@ private fun BranchState.autoReply(): BranchState {
             cursorId = next.id,
             statuses = state.statuses + (next.id to NodeStatus.IN_PROGRESS),
             lastEvent = BranchEvent.Advanced(next),
-        )
+        ).markRoadIn(next)
         if (next.isLeaf) return state.close(next, NodeStatus.COMPLETED)
     }
     return state
@@ -243,16 +264,30 @@ private fun BranchState.autoReply(): BranchState {
  * which is what makes one slip at move one survivable.
  */
 private fun BranchState.penalise(move: Move): BranchState {
+    // Depth of the move being reached for: shallower than the road in means the learner
+    // fumbled on the way to the opening, which is what costs the entry.
+    val fumbledRoadIn = roadInFumbled || (cursor?.depth?.plus(1) ?: 0) < trunkPly
+
     val forgiving = policy == MistakePolicy.ONE_ALLOWANCE && strikes == 0
-    if (forgiving) return copy(strikes = 1, lastEvent = BranchEvent.Missed(move, 1))
+    if (forgiving) {
+        return copy(
+            strikes = 1,
+            roadInFumbled = fumbledRoadIn,
+            lastEvent = BranchEvent.Missed(move, 1),
+        )
+    }
 
     val here = cursor
     val doomed = targetLeaf
     return if (here == null || doomed == null) {
         // Nothing played yet: reject the move rather than spend a line on it.
-        copy(strikes = strikes + 1, lastEvent = BranchEvent.Missed(move, strikes + 1))
+        copy(
+            strikes = strikes + 1,
+            roadInFumbled = fumbledRoadIn,
+            lastEvent = BranchEvent.Missed(move, strikes + 1),
+        )
     } else {
-        val closed = close(doomed, NodeStatus.FAILED)
+        val closed = copy(roadInFumbled = fumbledRoadIn).close(doomed, NodeStatus.FAILED)
         closed.copy(
             lastEvent = BranchEvent.BranchFailed(move, here, closed.cursor),
         )
