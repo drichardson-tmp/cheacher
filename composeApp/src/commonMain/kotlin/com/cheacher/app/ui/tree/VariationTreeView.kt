@@ -127,7 +127,7 @@ private fun NodeChip(
             .background(fill, RoundedCornerShape(7.dp))
             .then(
                 if (isCursor) {
-                    Modifier.border(2.dp, colors.streakBrass, RoundedCornerShape(7.dp))
+                    Modifier.border(2.dp, colors.streakAccent, RoundedCornerShape(7.dp))
                 } else {
                     Modifier
                 },

@@ -215,6 +215,11 @@ fun ChessBoardView(
                     detectTapGestures { tap ->
                         val square = squareAt(tap) ?: return@detectTapGestures
                         val from = selected
+                        // Recomputed from [legalMoves], never read from the captured
+                        // `targets`: this gesture block is keyed on [position], so a
+                        // value derived from `selected` would still hold the empty list
+                        // captured when nothing was selected, and no tap could ever
+                        // complete a move.
                         val chosen = if (from != null) {
                             legalMoves.filter { it.from == from && it.to == square }
                         } else {

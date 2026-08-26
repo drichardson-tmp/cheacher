@@ -92,7 +92,7 @@ class PaletteContrastTest {
             assertContrast(3.0, m3.secondary, m3.surface, "$name secondary-as-label/surface")
             assertContrast(3.0, m3.secondary, m3.background, "$name secondary-as-label/background")
             assertContrast(3.0, m3.outline, m3.surface, "$name outline/surface")
-            assertContrast(3.0, app.streakBrass, m3.surface, "$name streakBrass/surface")
+            assertContrast(3.0, app.streakAccent, m3.surface, "$name streakAccent/surface")
             assertContrast(3.0, app.boardLight, app.boardDark, "$name board square pair")
         }
     }
