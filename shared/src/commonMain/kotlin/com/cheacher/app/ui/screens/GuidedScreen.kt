@@ -132,7 +132,7 @@ fun GuidedScreen(
                 )
             } else {
                 SessionCompleteCard(
-                    title = "Opening accounted.",
+                    title = "Opening learned.",
                     subtitle = "Every line of ${state.tree.repertoire.title} found unaided. " +
                         "On to the next book.",
                     primaryLabel = "Continue",
@@ -230,13 +230,26 @@ fun GuidedScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Spacer(Modifier.weight(1f))
-                // The running score: a hint is half a point, a wrong move none — the deal
-                // is only accounted for when every line reads whole.
-                Text(
-                    "${formatHalfPoints(state.sessionScore)} of ${state.deal.size} accounted",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.secondary,
-                )
+                Column(horizontalAlignment = Alignment.End) {
+                    // The running score: a hint is half a point, a wrong move none — the
+                    // deal is only learned when every line reads whole.
+                    Text(
+                        "${formatHalfPoints(state.sessionScore)} of ${state.deal.size} learned",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.secondary,
+                    )
+                    AnimatedVisibility(
+                        visible = state.lineMissed,
+                        enter = fadeIn(),
+                        exit = fadeOut(),
+                    ) {
+                        Text(
+                            "This line won’t count",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
+                }
             }
 
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {

@@ -222,12 +222,12 @@ private fun RepertoireCard(
                 Text(
                     text = when {
                         standing.learned && standing.percent >= 100 ->
-                            "Accounted for" +
+                            "Learned" +
                                 if (standing.dueAtEpochMillis <= nowEpochMillis) " · review ready" else " · resting"
                         standing.learned ->
                             "Slipped to ${standing.percent}% · review ready"
                         else ->
-                            "${formatHalfPoints(standing.creditTotal)} of ${tree.lines.size} lines accounted"
+                            "${formatHalfPoints(standing.creditTotal)} of ${tree.lines.size} lines learned"
                     },
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.secondary,

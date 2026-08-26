@@ -76,7 +76,7 @@ data class GuidedState(
             else -> 1.0
         }
 
-    /** Session score over the whole [deal] — "3½ of 6 accounted". */
+    /** Session score over the whole [deal] — "3½ of 6 learned" in the UI. */
     val sessionScore: Double get() = deal.sumOf { lineCredits[it] ?: 0.0 }
 
     /** True when every dealt line's latest walk this session was clean and unaided. */
