@@ -58,6 +58,14 @@ fun GuidedScreen(
     onBack: () -> Unit,
     /** Absolute line indices that are reviews on today's syllabus — marked, never blocked. */
     reviewLineIndices: Set<Int> = emptySet(),
+    /** The sparring engine's current level, shown on the optional play-out branch. */
+    sparringElo: Int = 700,
+    /**
+     * The optional branch at the end of the book: play the last line's final position
+     * out against the engine. Handed the leaf node id. Null hides the offer — the
+     * default path is, and stays, the opening progression.
+     */
+    onPlayOut: ((leafNodeId: String) -> Unit)? = null,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val shakes by viewModel.wrongShakes.collectAsStateWithLifecycle()
@@ -89,11 +97,17 @@ fun GuidedScreen(
         UnlockBannerCard(banner = unlock, onDismiss = viewModel::dismissUnlock)
 
         if (state.finished) {
+            val finalLeafId = state.currentLine.lastOrNull()?.id
             SessionCompleteCard(
                 title = "Every name found.",
                 subtitle = "You walked all ${state.progress.lineCount} lines of ${state.tree.repertoire.title}.",
                 onAgain = viewModel::restartSession,
                 onBack = onBack,
+                playOut = if (onPlayOut != null && finalLeafId != null) {
+                    PlayOutOffer(engineElo = sparringElo, onPlayOut = { onPlayOut(finalLeafId) })
+                } else {
+                    null
+                },
             )
         } else {
             state.prompt?.let { prompt ->
@@ -239,12 +253,16 @@ fun UnlockBannerCard(banner: UnlockBanner?, onDismiss: () -> Unit) {
     }
 }
 
+/** The optional fork at the end of the book: a full game against the sparring engine. */
+data class PlayOutOffer(val engineElo: Int, val onPlayOut: () -> Unit)
+
 @Composable
 fun SessionCompleteCard(
     title: String,
     subtitle: String,
     onAgain: () -> Unit,
     onBack: () -> Unit,
+    playOut: PlayOutOffer? = null,
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -254,9 +272,19 @@ fun SessionCompleteCard(
             Text(title, style = MaterialTheme.typography.headlineMedium)
             Text(subtitle, style = MaterialTheme.typography.bodyLarge)
             Spacer(Modifier.height(4.dp))
+            // The default path stays the opening progression — the filled button leads
+            // back to the ladder; playing the game out is a quieter, optional fork.
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 Button(onClick = onAgain) { Text("Once more") }
                 OutlinedButton(onClick = onBack) { Text("Back to shelf") }
+            }
+            if (playOut != null) {
+                TextButton(
+                    onClick = playOut.onPlayOut,
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp),
+                ) {
+                    Text("Or play this one out · engine at ~${playOut.engineElo}")
+                }
             }
         }
     }

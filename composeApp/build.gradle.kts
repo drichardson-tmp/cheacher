@@ -43,6 +43,7 @@ kotlin {
         }
         commonTest.dependencies {
             implementation(kotlin("test"))
+            implementation(libs.kotlinx.coroutines.test)
         }
         androidMain.dependencies {
             implementation(compose.preview)
@@ -65,6 +66,16 @@ android {
 
     sourceSets["main"].manifest.srcFile("src/androidMain/AndroidManifest.xml")
     sourceSets["main"].res.srcDirs("src/androidMain/res")
+    // Stockfish 11 rides along as libstockfish.so per ABI — see src/androidMain/jniLibs/README.md.
+    sourceSets["main"].jniLibs.srcDirs("src/androidMain/jniLibs")
+
+    packaging {
+        jniLibs {
+            // Keep "libraries" extracted on disk — libstockfish.so is really an
+            // executable, and exec() needs a real file, not a page in the APK.
+            useLegacyPackaging = true
+        }
+    }
 
     buildTypes {
         getByName("release") {

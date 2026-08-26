@@ -1,0 +1,43 @@
+package com.cheacher.app.training
+
+import com.cheacher.app.chess.Move
+import com.cheacher.app.domain.OpeningTree
+import com.cheacher.app.domain.tinyRepertoire
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertTrue
+
+/**
+ * The seam the play-out offer stands on: a finished guided session still exposes the
+ * line it just walked, and that line's leaf id is a valid [PlayOutState.start] handle.
+ */
+class PlayOutHandoffTest {
+    private val tree = OpeningTree.resolve(tinyRepertoire())
+
+    private fun move(uci: String): Move = Move.fromUci(uci)!!
+
+    @Test
+    fun finishedGuidedSessionHandsItsLastLeafToPlayOut() {
+        var state = GuidedState.start(tree)
+        for (uci in listOf("e2e4", "e7e5", "g1f3", "e2e4", "c7c5", "g1f3")) {
+            state = state.submit(move(uci))
+        }
+        assertTrue(state.finished)
+        val leafId = state.currentLine.last().id
+        assertEquals("0.1.0", leafId, "the last walked line, not the first")
+
+        val playOut = PlayOutState.start(tree, leafId)
+        assertEquals(state.currentLine.last().position, playOut.position)
+        assertEquals(state.currentLine.map { it.san }, playOut.bookMoves.map { it.san })
+    }
+
+    @Test
+    fun aRestrictedSyllabusHandsOverItsOwnFinalLine() {
+        var state = GuidedState.start(tree, lineIndices = listOf(0))
+        for (uci in listOf("e2e4", "e7e5", "g1f3")) {
+            state = state.submit(move(uci))
+        }
+        assertTrue(state.finished)
+        assertEquals("0.0.0", state.currentLine.last().id)
+    }
+}

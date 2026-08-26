@@ -21,6 +21,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.cheacher.app.data.SampleRepertoires
 import com.cheacher.app.domain.OpeningTree
+import com.cheacher.app.engine.SparringElo
 import com.cheacher.app.progress.ProgressStore
 import com.cheacher.app.progress.ProgressStoreProvider
 import com.cheacher.app.progress.StoreHealth
@@ -35,6 +36,8 @@ import com.cheacher.app.ui.screens.GuidedScreen
 import com.cheacher.app.ui.screens.GuidedViewModel
 import com.cheacher.app.ui.screens.HomeScreen
 import com.cheacher.app.ui.screens.Journal
+import com.cheacher.app.ui.screens.PlayOutScreen
+import com.cheacher.app.ui.screens.PlayOutViewModel
 import com.cheacher.app.ui.theme.CheacherTheme
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -71,6 +74,19 @@ sealed interface Screen {
         val oneSided: Boolean,
         /** Null opens the whole tree; otherwise nodes outside this set start locked. */
         val allowedNodeIds: Set<String>?,
+    ) : Screen
+
+    /**
+     * The optional epilogue: play the game out from the end of one book line against
+     * the sparring engine. [engineElo] is the learner's sparring rating, snapshotted at
+     * navigation like every other gate — mid-game record updates must not retune a
+     * running opponent.
+     */
+    data class PlayOut(
+        val repertoireId: String,
+        /** Leaf node whose line's final position the game continues from. */
+        val leafNodeId: String,
+        val engineElo: Int,
     ) : Screen
 }
 
@@ -186,6 +202,13 @@ class RootViewModel(val progress: ProgressStore) : ViewModel() {
         }
     }
 
+    fun openPlayOut(tree: OpeningTree, leafNodeId: String) {
+        viewModelScope.launch {
+            val record = settledRecordFor(tree)
+            _screen.value = Screen.PlayOut(tree.repertoire.id, leafNodeId, record.sparring.rating)
+        }
+    }
+
     fun home() {
         _screen.value = Screen.Home
     }
@@ -247,6 +270,9 @@ fun App() {
                         viewModel = vm,
                         reviewLineIndices = current.reviewLineIndices,
                         onBack = root::home,
+                        sparringElo = records?.get(current.repertoireId)?.sparring?.rating
+                            ?: SparringElo.START,
+                        onPlayOut = { leafId -> root.openPlayOut(tree, leafId) },
                     )
                 }
 
@@ -266,6 +292,25 @@ fun App() {
                         )
                     }
                     BranchScreen(viewModel = vm, onBack = root::home)
+                }
+
+                is Screen.PlayOut -> {
+                    val tree = root.tree(current.repertoireId)
+                    val sessionScope = rememberCoroutineScope()
+                    val vm = remember(current) {
+                        PlayOutViewModel(
+                            tree = tree,
+                            leafId = current.leafNodeId,
+                            engineElo = current.engineElo,
+                            scope = sessionScope,
+                            journal = root.journalFor(tree),
+                        )
+                    }
+                    PlayOutScreen(
+                        viewModel = vm,
+                        openingTitle = tree.repertoire.title,
+                        onBack = root::home,
+                    )
                 }
             }
         }
