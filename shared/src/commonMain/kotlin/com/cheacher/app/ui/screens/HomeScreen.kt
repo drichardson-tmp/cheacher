@@ -29,6 +29,7 @@ import com.cheacher.app.chess.Color as ChessColor
 import com.cheacher.app.domain.OpeningTree
 import com.cheacher.app.progress.StoreHealth
 import com.cheacher.app.progress.DrillRecord
+import com.cheacher.app.progress.MoveDrillRecord
 import com.cheacher.app.progress.TrainingRecord
 import com.cheacher.app.training.MistakePolicy
 import com.cheacher.app.training.OpeningStanding
@@ -58,8 +59,10 @@ fun HomeScreen(
     onOpenGuided: (OpeningTree) -> Unit,
     onOpenBranch: (OpeningTree) -> Unit,
     onOpenSquareDrill: () -> Unit = {},
+    onOpenMoveDrill: () -> Unit = {},
     /** The drill's history, if any has been banked. Null reads as "never drilled". */
     drill: DrillRecord? = null,
+    moveDrill: MoveDrillRecord? = null,
 ) {
     Column(
         modifier = Modifier
@@ -136,6 +139,11 @@ fun HomeScreen(
         }
 
         SquareDrillCard(drill = drill, onOpen = onOpenSquareDrill)
+        MoveDrillCard(
+            record = moveDrill,
+            moveCount = trees.sumOf { it.allNodes.size },
+            onOpen = onOpenMoveDrill,
+        )
 
         for (tree in trees) {
             RepertoireCard(
@@ -298,6 +306,32 @@ private fun SquareDrillCard(drill: DrillRecord?, onOpen: () -> Unit) {
             Spacer(Modifier.height(2.dp))
             Row {
                 OutlinedButton(onClick = onOpen) { Text("Drill squares") }
+            }
+        }
+    }
+}
+
+/** The shelf-wide vocabulary lab: every authored move, tested in both directions. */
+@Composable
+private fun MoveDrillCard(record: MoveDrillRecord?, moveCount: Int, onOpen: () -> Unit) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+    ) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text("Move drill", style = MaterialTheme.typography.titleMedium)
+            Text(
+                text = record?.let {
+                    val move = it.findMove.lastMedianMillis?.let(::tenths) ?: "—"
+                    val name = it.nameIt.lastMedianMillis?.let(::tenths) ?: "—"
+                    "Find the move $move · name it $name · $moveCount moves in the bank"
+                } ?: "Name → move, then move → name. Fuzzy search across all $moveCount shelf moves.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(2.dp))
+            Row {
+                OutlinedButton(onClick = onOpen, enabled = moveCount > 0) { Text("Drill moves") }
             }
         }
     }

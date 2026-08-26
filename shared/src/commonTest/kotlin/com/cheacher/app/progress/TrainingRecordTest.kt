@@ -95,6 +95,11 @@ class TrainingRecordTest {
             .recordLineCompleted("0.0.1")
             .recordBranchLineCompleted("0.0.1", atEpochMillis = 43L)
             .recordBranchSessionCompleted(cleanSweep = false)
+            .copy(
+                moveDrill = MoveDrillRecord(
+                    findMove = DrillRecord(rounds = 1, reps = 20, cleanReps = 18, lastMedianMillis = 900L),
+                ),
+            )
         assertEquals(record, json.decodeFromString<TrainingRecord>(json.encodeToString(record)))
     }
 
