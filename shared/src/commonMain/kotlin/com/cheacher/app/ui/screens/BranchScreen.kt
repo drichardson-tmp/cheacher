@@ -35,6 +35,8 @@ import com.cheacher.app.chess.Color as ChessColor
 import com.cheacher.app.training.BranchEvent
 import com.cheacher.app.training.MistakePolicy
 import com.cheacher.app.ui.board.ChessBoardView
+import com.cheacher.app.ui.feedback.TrainingHaptic
+import com.cheacher.app.ui.feedback.rememberTrainingHaptics
 import com.cheacher.app.ui.theme.CheacherTheme
 import com.cheacher.app.ui.theme.Motion
 import com.cheacher.app.ui.tree.VariationTreeView
@@ -51,12 +53,14 @@ import com.cheacher.app.ui.tree.VariationTreeView
 @Composable
 fun BranchScreen(
     viewModel: BranchViewModel,
+    hapticsEnabled: Boolean = true,
     onBack: () -> Unit,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val shakes by viewModel.wrongShakes.collectAsStateWithLifecycle()
     val flashes by viewModel.closeFlashes.collectAsStateWithLifecycle()
     val unlock by viewModel.unlock.collectAsStateWithLifecycle()
+    val haptic = rememberTrainingHaptics(hapticsEnabled)
 
     // One-sided practice keeps the learner's chair fixed; both-sides recall turns the
     // board over with the move, exactly as the guided walkthrough does.
@@ -126,7 +130,21 @@ fun BranchScreen(
                 position = state.position,
                 lastMove = state.cursor?.move,
                 orientation = perspective,
-                onMove = viewModel::onMove,
+                onMove = { move ->
+                    viewModel.onMove(move)
+                    haptic(
+                        when (viewModel.state.value.lastEvent) {
+                            is BranchEvent.Advanced -> TrainingHaptic.Correct
+                            is BranchEvent.BranchClosed, BranchEvent.SessionComplete ->
+                                TrainingHaptic.LineComplete
+                            is BranchEvent.Missed,
+                            is BranchEvent.BranchFailed,
+                            is BranchEvent.AlreadyClosed,
+                            is BranchEvent.Locked -> TrainingHaptic.Wrong
+                            null -> return@ChessBoardView
+                        },
+                    )
+                },
                 enabled = !state.finished,
                 shakeTrigger = shakes,
                 holdBeforeReset = state.lastEvent is BranchEvent.BranchClosed ||

@@ -43,6 +43,8 @@ import com.cheacher.app.domain.TreeNode
 import com.cheacher.app.training.GuidedEvent
 import com.cheacher.app.training.StudyKind
 import com.cheacher.app.ui.board.ChessBoardView
+import com.cheacher.app.ui.feedback.TrainingHaptic
+import com.cheacher.app.ui.feedback.rememberTrainingHaptics
 import com.cheacher.app.ui.theme.CheacherTheme
 import com.cheacher.app.ui.theme.Motion
 import kotlinx.coroutines.delay
@@ -61,6 +63,7 @@ import kotlin.math.roundToInt
 @Composable
 fun GuidedScreen(
     viewModel: GuidedViewModel,
+    hapticsEnabled: Boolean = true,
     onBack: () -> Unit,
     /** Deals the next session on the study plan — the "pop to the next book" moment. */
     onContinue: () -> Unit,
@@ -77,6 +80,7 @@ fun GuidedScreen(
     val shakes by viewModel.wrongShakes.collectAsStateWithLifecycle()
     val unlock by viewModel.unlock.collectAsStateWithLifecycle()
     val isReview = viewModel.kind == StudyKind.REVIEW
+    val haptic = rememberTrainingHaptics(hapticsEnabled)
 
     Column(
         modifier = Modifier
@@ -187,7 +191,18 @@ fun GuidedScreen(
                 lastMove = state.played.lastOrNull()?.move,
                 // The chair follows the prompt: black's moves are learned from black's side.
                 orientation = state.prompt?.mover ?: state.tree.repertoire.perspective,
-                onMove = viewModel::onMove,
+                onMove = { move ->
+                    viewModel.onMove(move)
+                    haptic(
+                        when (viewModel.state.value.lastEvent) {
+                            is GuidedEvent.Wrong -> TrainingHaptic.Wrong
+                            is GuidedEvent.LineComplete, GuidedEvent.SessionComplete ->
+                                TrainingHaptic.LineComplete
+                            is GuidedEvent.Correct -> TrainingHaptic.Correct
+                            null -> return@ChessBoardView
+                        },
+                    )
+                },
                 shakeTrigger = shakes,
                 holdBeforeReset = state.lastEvent is GuidedEvent.LineComplete,
                 modifier = Modifier.fillMaxWidth(),

@@ -2,6 +2,7 @@ package com.cheacher.app.progress
 
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import kotlinx.coroutines.CancellationException
@@ -28,6 +29,12 @@ data class StoreHealth(
     val isHealthy: Boolean get() = unreadableRecords == 0 && !lastWriteFailed
 }
 
+/** Small app-wide preferences that are not part of a repertoire's training history. */
+data class AppSettings(
+    /** Tactile move feedback is welcoming by default and can be silenced from the shelf. */
+    val hapticsEnabled: Boolean = true,
+)
+
 /**
  * Where [TrainingRecord]s live between sessions.
  *
@@ -42,8 +49,14 @@ interface ProgressStore {
     /** How the store is doing. Healthy forever for stores that cannot fail. */
     val health: Flow<StoreHealth> get() = flowOf(StoreHealth())
 
+    /** App-wide preferences, kept beside (but separate from) training records. */
+    val settings: Flow<AppSettings> get() = flowOf(AppSettings())
+
     /** Atomically rewrites one repertoire's record. Starts from [TrainingRecord.empty] if absent. */
     suspend fun update(repertoireId: String, transform: (TrainingRecord) -> TrainingRecord)
+
+    /** Atomically updates app-wide preferences. */
+    suspend fun updateSettings(transform: (AppSettings) -> AppSettings) = Unit
 }
 
 /**
@@ -90,6 +103,10 @@ class DataStoreProgressStore(
             StoreHealth(unreadableRecords = broken, lastWriteFailed = failed)
         }
 
+    override val settings: Flow<AppSettings> = dataStore.data.map { preferences ->
+        AppSettings(hapticsEnabled = preferences[HAPTICS_ENABLED] ?: true)
+    }
+
     override suspend fun update(repertoireId: String, transform: (TrainingRecord) -> TrainingRecord) {
         try {
             editRecord(repertoireId, transform)
@@ -107,6 +124,31 @@ class DataStoreProgressStore(
             } catch (_: IOException) {
                 writeFailed.value = true
             }
+        }
+    }
+
+    override suspend fun updateSettings(transform: (AppSettings) -> AppSettings) {
+        try {
+            editSettings(transform)
+            writeFailed.value = false
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: IOException) {
+            try {
+                editSettings(transform)
+                writeFailed.value = false
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: IOException) {
+                writeFailed.value = true
+            }
+        }
+    }
+
+    private suspend fun editSettings(transform: (AppSettings) -> AppSettings) {
+        dataStore.edit { preferences ->
+            val current = AppSettings(hapticsEnabled = preferences[HAPTICS_ENABLED] ?: true)
+            preferences[HAPTICS_ENABLED] = transform(current).hapticsEnabled
         }
     }
 
@@ -129,18 +171,25 @@ class DataStoreProgressStore(
     private companion object {
         const val RECORD_PREFIX = "record."
         const val QUARANTINE_PREFIX = "corrupt."
+        val HAPTICS_ENABLED = booleanPreferencesKey("settings.haptics_enabled")
     }
 }
 
 /** In-memory store for tests and previews; same contract, no disk, permanently healthy. */
 class InMemoryProgressStore : ProgressStore {
     private val state = MutableStateFlow<Map<String, TrainingRecord>>(emptyMap())
+    private val settingsState = MutableStateFlow(AppSettings())
 
     override val records: Flow<Map<String, TrainingRecord>> = state
+    override val settings: Flow<AppSettings> = settingsState
 
     override suspend fun update(repertoireId: String, transform: (TrainingRecord) -> TrainingRecord) {
         state.update { all ->
             all + (repertoireId to transform(all[repertoireId] ?: TrainingRecord.empty(repertoireId)))
         }
+    }
+
+    override suspend fun updateSettings(transform: (AppSettings) -> AppSettings) {
+        settingsState.update(transform)
     }
 }
