@@ -34,6 +34,7 @@ import androidx.compose.material3.CardDefaults
 import com.cheacher.app.chess.Color as ChessColor
 import com.cheacher.app.training.BranchEvent
 import com.cheacher.app.training.MistakePolicy
+import com.cheacher.app.ui.board.BoardResetHold
 import com.cheacher.app.ui.board.ChessBoardView
 import com.cheacher.app.ui.feedback.TrainingHaptic
 import com.cheacher.app.ui.feedback.rememberTrainingHaptics
@@ -135,7 +136,7 @@ fun BranchScreen(
                     haptic(
                         when (viewModel.state.value.lastEvent) {
                             is BranchEvent.Advanced -> TrainingHaptic.Correct
-                            is BranchEvent.BranchClosed, BranchEvent.SessionComplete ->
+                            is BranchEvent.BranchClosed, is BranchEvent.SessionComplete ->
                                 TrainingHaptic.LineComplete
                             is BranchEvent.Missed,
                             is BranchEvent.BranchFailed,
@@ -147,8 +148,11 @@ fun BranchScreen(
                 },
                 enabled = !state.finished,
                 shakeTrigger = shakes,
-                holdBeforeReset = state.lastEvent is BranchEvent.BranchClosed ||
-                    state.lastEvent is BranchEvent.SessionComplete,
+                resetHold = when (val event = state.lastEvent) {
+                    is BranchEvent.BranchClosed -> event.leaf
+                    is BranchEvent.SessionComplete -> event.leaf
+                    else -> null
+                }?.let { BoardResetHold(position = it.position, lastMove = it.move) },
                 // Recall is unaided: the grid comes off the board once the names are learned.
                 showCoordinates = false,
                 modifier = Modifier.fillMaxWidth(),
