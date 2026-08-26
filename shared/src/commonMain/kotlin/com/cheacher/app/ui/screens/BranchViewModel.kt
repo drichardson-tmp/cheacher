@@ -11,6 +11,7 @@ import com.cheacher.app.training.BranchState
 import com.cheacher.app.training.MistakePolicy
 import com.cheacher.app.training.NodeStatus
 import com.cheacher.app.training.backToJunction
+import com.cheacher.app.training.isReachingForRoadIn
 import com.cheacher.app.training.lapseLinesThrough
 import com.cheacher.app.training.leafIdsThrough
 import com.cheacher.app.training.submit
@@ -83,6 +84,11 @@ class BranchViewModel(
         val next = current.submit(move)
         _state.value = next
 
+        // Blind recall pays the entry toll too — reaching the opening with a clean sheet.
+        if (next.roadInCleared && !current.roadInCleared) {
+            journal { it.recordTrunkCleared() }
+        }
+
         when (val event = next.lastEvent) {
             // A miss also lapses every line through the missed node: the review streak
             // resets, so the trouble line comes back sooner on the coach's plan.
@@ -114,6 +120,9 @@ class BranchViewModel(
         val nodeId = cursorNodeId ?: TrainingRecord.ROOT_NODE_KEY
         lapsedThisRound += tree.leafIdsThrough(nodeId)
         journal { it.recordMiss(nodeId).lapseLinesThrough(tree, nodeId) }
+        // A stumble on the way in hands back the entry, so the next session walks the
+        // road again rather than being dropped past a door that just proved sticky.
+        if (tree.isReachingForRoadIn(cursorNodeId)) journal { it.recordTrunkFumbled() }
     }
 
     fun backToJunction() = _state.update { it.backToJunction() }

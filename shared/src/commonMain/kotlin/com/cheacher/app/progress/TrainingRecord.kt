@@ -92,6 +92,18 @@ data class TrainingRecord(
     @SerialName("line_credits")
     val lineCredits: Map<String, Double> = emptyMap(),
     /**
+     * Times the book's road in — the moves every line shares — was walked perfectly:
+     * found unaided, no hint, no wrong move. That walk is the whole toll for starting
+     * later sessions *inside* the opening, so this is the one number [OpeningEntry] asks
+     * about. Zeroed by a fumble on the road in, which is the only way the entry is lost.
+     *
+     * Defaulted, so records written before the entry existed still decode; they simply
+     * re-earn the entry on their next session's first walk, which costs one trip down a
+     * road the learner has already proven they know.
+     */
+    @SerialName("trunk_clears")
+    val trunkClears: Int = 0,
+    /**
      * The whole opening's review clock, set the first time every line is accounted for
      * (all credits 1.0) and rolled by each later look: a clean look grows the streak, a
      * slip resets it. Null means the opening has never been fully accounted — it is still
@@ -185,6 +197,16 @@ data class TrainingRecord(
         val review = lineReviews[leafId] ?: return this
         return copy(lineReviews = lineReviews + (leafId to review.copy(streak = 0)))
     }
+
+    /** One perfect walk down the shared road into the opening — see [trunkClears]. */
+    fun recordTrunkCleared(): TrainingRecord = copy(trunkClears = trunkClears + 1)
+
+    /**
+     * A miss on the road in. The entry is revoked outright rather than decremented: the
+     * claim it stands on is "you can get here without thinking", and one stumble is the
+     * counter-example. Re-earning it costs exactly one clean walk, same as the first time.
+     */
+    fun recordTrunkFumbled(): TrainingRecord = if (trunkClears == 0) this else copy(trunkClears = 0)
 
     /** Times [leafId]'s line was banked in branch recall. */
     fun branchCompletionsOf(leafId: String): Int = branchLineCompletions[leafId] ?: 0
