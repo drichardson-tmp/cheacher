@@ -39,8 +39,13 @@ platforms, and surfaces on the shelf as "trouble spots".
 
 ## Architecture
 
+Two Gradle modules, the split Android Gradle Plugin 9 requires: `shared` is the
+Kotlin Multiplatform library (everything below), and `androidApp` is a thin
+`com.android.application` shell holding only `MainActivity` and the manifest. iOS
+consumes `shared` directly as the `Shared` framework — `iosApp` is the Xcode project.
+
 ```
-composeApp/src/commonMain/kotlin/com/cheacher/opening/
+shared/src/commonMain/kotlin/com/cheacher/app/
 ├── chess/        Pure-Kotlin chess engine. Immutable Position, full legal move
 │                 generation (castling, en passant, promotion), FEN, SAN
 │                 (render + generate-and-match parsing). Zero dependencies.
@@ -79,8 +84,8 @@ Xcode for iOS. `local.properties` must point at your SDK (`sdk.dir=...`).
 **Android**
 
 ```sh
-./gradlew :composeApp:assembleDebug          # build the APK
-./gradlew :composeApp:installDebug           # install on a connected device
+./gradlew :androidApp:assembleDebug          # build the APK
+./gradlew :androidApp:installDebug           # install on a connected device
 ```
 
 **iOS**
@@ -94,14 +99,14 @@ xcodebuild -project iosApp.xcodeproj -scheme iosApp \
 ```
 
 The Xcode project's "Compile Kotlin Framework" phase invokes
-`:composeApp:embedAndSignAppleFrameworkForXcode`, so the Kotlin framework is rebuilt
+`:shared:embedAndSignAppleFrameworkForXcode`, so the Kotlin framework is rebuilt
 automatically on every Xcode build.
 
 ## Tests
 
 ```sh
-./gradlew :composeApp:testDebugUnitTest      # the full commonTest suite on JVM
-./gradlew :composeApp:iosSimulatorArm64Test  # same suite on Kotlin/Native (slower)
+./gradlew :shared:testAndroidHostTest        # the full commonTest suite on the host JVM
+./gradlew :shared:iosSimulatorArm64Test      # same suite on Kotlin/Native (slower)
 ```
 
 The suite covers the engine (FEN round-trips, perft — 8,902 nodes at depth 3 from the
