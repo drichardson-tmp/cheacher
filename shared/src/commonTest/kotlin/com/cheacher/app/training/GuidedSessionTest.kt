@@ -96,6 +96,9 @@ class GuidedSessionTest {
             .restartLine()
         assertEquals(0, state.plyIndex)
         assertFalse(state.ideaRevealed)
+        assertFalse(state.lineAided)
+        assertFalse(state.lineMissed)
+        assertEquals(1.0, state.currentLineCredit)
         assertEquals(tree.root, state.position)
         assertNull(state.lastEvent)
     }
@@ -185,10 +188,16 @@ class GuidedSessionTest {
     }
 
     @Test
-    fun restartLineKeepsTheWalkTainted() {
-        val state = GuidedState.start(tree).submit(move("d2d4")).restartLine()
-        assertTrue(state.lineMissed, "rewinding is not un-seeing the answer")
-        assertEquals(0.0, state.currentLineCredit)
+    fun cleanReplayAfterRestartBanksFullCredit() {
+        var state = GuidedState.start(tree, lineIndices = listOf(0))
+            .submit(move("d2d4"))
+            .restartLine()
+
+        for (uci in listOf("e2e4", "e7e5", "g1f3")) state = state.submit(move(uci))
+
+        assertEquals(1.0, state.lineCredits[0])
+        assertEquals(1.0, state.sessionScore)
+        assertTrue(state.allClean)
     }
 
     @Test

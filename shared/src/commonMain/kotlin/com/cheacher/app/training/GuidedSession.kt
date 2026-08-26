@@ -15,10 +15,11 @@ import com.cheacher.app.domain.TreeNode
  *
  * Every walked line banks a **credit**: 1.0 found unaided, 0.5 found with the hint
  * (asked for or earned by a miss — a wrong move reveals the idea, so it can never score
- * above a hint), 0.0 after a wrong move. With [masteryLoop] on, finishing the deal is
- * not finishing the session: imperfect lines are re-dealt, pass after pass, until every
- * line has one clean unaided walk — the depth-first traversal unwinds until everything
- * is accounted for.
+ * above a hint), 0.0 after a wrong move. Restarting a line begins a fresh scoring attempt,
+ * while the miss itself remains part of the learner's history. With [masteryLoop] on,
+ * finishing the deal is not finishing the session: imperfect lines are re-dealt, pass
+ * after pass, until every line has one clean unaided walk — the depth-first traversal
+ * unwinds until everything is accounted for.
  *
  * Pure state: [submit] returns a new [GuidedState] and touches nothing else, so the whole
  * mode is testable without a board, a clock, or a coroutine.
@@ -231,9 +232,16 @@ fun GuidedState.submit(move: Move): GuidedState {
 fun GuidedState.revealIdea(): GuidedState = copy(ideaRevealed = true, lineAided = true)
 
 /**
- * Drops the learner back to the start of the current line. The board resets; the walk's
- * aided/missed flags do not — you have seen the answers, so the clean shot is the
- * re-deal, not the rewind.
+ * Drops the learner back to the start of the current line for a fresh scoring attempt.
+ * The miss remains journalled by the view model, but it does not permanently disqualify
+ * a clean replay of the line.
  */
 fun GuidedState.restartLine(): GuidedState =
-    copy(plyIndex = entryPly, ideaRevealed = false, wrongAttempts = 0, lastEvent = null)
+    copy(
+        plyIndex = entryPly,
+        ideaRevealed = false,
+        wrongAttempts = 0,
+        lineAided = false,
+        lineMissed = false,
+        lastEvent = null,
+    )
