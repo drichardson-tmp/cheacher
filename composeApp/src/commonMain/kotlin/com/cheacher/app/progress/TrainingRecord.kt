@@ -62,6 +62,23 @@ data class TrainingRecord(
      */
     @SerialName("line_reviews")
     val lineReviews: Map<String, LineReview> = emptyMap(),
+    /**
+     * Leaf node id → the credit its *most recent* guided walk earned: 1.0 found unaided,
+     * 0.5 with the hint, 0.0 after a wrong move. Latest-wins rather than best-wins,
+     * because the number answers "do you know this line *now*" — a clean pass last month
+     * followed by a hint yesterday is a half-known line, not a known one.
+     */
+    @SerialName("line_credits")
+    val lineCredits: Map<String, Double> = emptyMap(),
+    /**
+     * The whole opening's review clock, set the first time every line is accounted for
+     * (all credits 1.0) and rolled by each later look: a clean look grows the streak, a
+     * slip resets it. Null means the opening has never been fully accounted — it is still
+     * being learned, not reviewed. Same [LineReview] shape as the line ladder, same
+     * expanding intervals, one level up.
+     */
+    @SerialName("opening_review")
+    val openingReview: LineReview? = null,
     /** Epoch-millis of each session start, oldest first. The spacing curve lives here. */
     @SerialName("session_starts")
     val sessionStarts: List<Long> = emptyList(),
@@ -137,6 +154,32 @@ data class TrainingRecord(
 
     /** Times [leafId]'s line was banked in branch recall. */
     fun branchCompletionsOf(leafId: String): Int = branchLineCompletions[leafId] ?: 0
+
+    /** The credit [leafId]'s line earned on its most recent guided walk. Never walked reads 0. */
+    fun creditOf(leafId: String): Double = lineCredits[leafId] ?: 0.0
+
+    /** Overwrites [leafId]'s credit with what the walk just finished actually earned. */
+    fun recordLineCredit(leafId: String, credit: Double): TrainingRecord =
+        copy(lineCredits = lineCredits + (leafId to credit))
+
+    /**
+     * Rolls the opening's review clock after a finished session over [leafIds] (the
+     * opening's leaves — passed in because the record stays tree-free). Fully accounted
+     * (every credit 1.0) grows the streak, starting it at 1 the first time; anything less
+     * on an opening that *was* accounted resets the streak to zero, which puts the whole
+     * opening at the front of the review queue. A partial score on a never-accounted
+     * opening changes nothing — you cannot lapse what you never held.
+     */
+    fun recordOpeningOutcome(leafIds: List<String>, atEpochMillis: Long): TrainingRecord {
+        val accounted = leafIds.isNotEmpty() && leafIds.all { creditOf(it) >= 1.0 }
+        return when {
+            accounted -> copy(
+                openingReview = LineReview(atEpochMillis, (openingReview?.streak ?: 0) + 1),
+            )
+            openingReview != null -> copy(openingReview = LineReview(atEpochMillis, 0))
+            else -> this
+        }
+    }
 
     /**
      * Times [leafId]'s line was walked outside branch recall — derived by subtraction so
