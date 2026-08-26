@@ -54,7 +54,8 @@ class BranchSessionTest {
             state = state.submit(move(uci))
         }
         assertTrue(state.finished)
-        assertEquals(BranchEvent.SessionComplete, state.lastEvent)
+        val event = assertIs<BranchEvent.SessionComplete>(state.lastEvent)
+        assertEquals("0.1.0", event.leaf.id)
         assertNull(state.cursorId)
         assertEquals(2, state.progress.closedLines)
         assertEquals(0, state.progress.failedLines)
@@ -188,7 +189,7 @@ class BranchSessionTest {
         var state = BranchState.start(tree, allowedNodeIds = lineZeroOnly)
         for (uci in listOf("e2e4", "e7e5", "g1f3")) state = state.submit(move(uci))
         assertTrue(state.finished, "the locked Sicilian is not waiting for anyone")
-        assertEquals(BranchEvent.SessionComplete, state.lastEvent)
+        assertIs<BranchEvent.SessionComplete>(state.lastEvent)
         assertEquals(1, state.progress.closedLines)
         assertEquals(1, state.progress.totalLines)
         // Roll-up treats the locked sibling as closed, so 1.e4 completes…

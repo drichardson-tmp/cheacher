@@ -42,6 +42,7 @@ import com.cheacher.app.chess.Color as ChessColor
 import com.cheacher.app.domain.TreeNode
 import com.cheacher.app.training.GuidedEvent
 import com.cheacher.app.training.StudyKind
+import com.cheacher.app.ui.board.BoardResetHold
 import com.cheacher.app.ui.board.ChessBoardView
 import com.cheacher.app.ui.feedback.TrainingHaptic
 import com.cheacher.app.ui.feedback.rememberTrainingHaptics
@@ -204,7 +205,10 @@ fun GuidedScreen(
                     )
                 },
                 shakeTrigger = shakes,
-                holdBeforeReset = state.lastEvent is GuidedEvent.LineComplete,
+                resetHold = (state.lastEvent as? GuidedEvent.LineComplete)
+                    ?.line
+                    ?.lastOrNull()
+                    ?.let { BoardResetHold(position = it.position, lastMove = it.move) },
                 modifier = Modifier.fillMaxWidth(),
             )
 

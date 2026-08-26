@@ -81,8 +81,10 @@ import kotlin.math.roundToInt
  *
  * @param shakeTrigger increment to play the wrong-move shake (a rejected idea should
  *   *feel* rejected, not just be silently ignored).
- * @param holdBeforeReset preserve the completed position for one success beat before a
- *   backward jump begins. Failure and manual resets should leave this false.
+ * @param resetHold the completed position to show for one success beat before a backward
+ *   jump begins. The model may already have dealt the next line, so this must carry the
+ *   position after the completing move rather than relying on the currently rendered board.
+ *   Failure and manual resets should leave this null.
  * @param onSquareTap when set, the board stops being a chessboard and becomes a grid of
  *   64 buttons: taps report their square and nothing selects, moves, or drags. The square
  *   drill's whole interface.
@@ -101,7 +103,7 @@ fun ChessBoardView(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
     shakeTrigger: Int = 0,
-    holdBeforeReset: Boolean = false,
+    resetHold: BoardResetHold? = null,
     showCoordinates: Boolean = true,
     onSquareTap: ((Int) -> Unit)? = null,
     spotlight: Spotlight? = null,
@@ -119,10 +121,17 @@ fun ChessBoardView(
     val resetScale = remember { Animatable(1f) }
     var resetActive by remember { mutableStateOf(false) }
     val resetRequested = BoardTurn.isReset(boardPosition, position)
-    LaunchedEffect(position, lastMove, orientation, holdBeforeReset) {
+    LaunchedEffect(position, lastMove, orientation, resetHold) {
         if (BoardTurn.isReset(boardPosition, position)) {
             resetActive = true
-            if (holdBeforeReset) delay(Motion.boardSuccessHoldMillis)
+            if (resetHold != null) {
+                // Reducers deal the next line atomically, so the completed position never
+                // otherwise reaches this composable. Render it first: tap moves now glide
+                // to their destination, and dragged pieces remain where they were dropped.
+                boardPosition = resetHold.position
+                boardLastMove = resetHold.lastMove
+                delay(Motion.boardSuccessHoldMillis)
+            }
             resetDegrees.snapTo(0f)
             resetScale.snapTo(1f)
 
@@ -523,6 +532,9 @@ private fun DrawScope.drawCheckGlow(origin: Offset, squarePx: Float, color: Colo
 
 /** The drill's one-square verdict wash: green for found, red for a wrong tap. */
 data class Spotlight(val square: Int, val correct: Boolean)
+
+/** The final frame of a successfully completed line, retained while the next is dealt. */
+data class BoardResetHold(val position: Position, val lastMove: Move?)
 
 /** A piece in hand: where it came from, and where the finger is now (board pixels). */
 private data class DragState(val from: Int, val pointer: Offset)

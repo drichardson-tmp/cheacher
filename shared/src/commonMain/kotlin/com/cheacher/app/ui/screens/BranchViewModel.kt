@@ -84,7 +84,7 @@ class BranchViewModel(
             is BranchEvent.Missed -> recordMissAt(current.cursorId)
             is BranchEvent.BranchFailed -> recordMissAt(event.at?.id)
             is BranchEvent.Locked -> _wrongShakes.update { it + 1 }
-            is BranchEvent.BranchClosed, BranchEvent.SessionComplete -> _closeFlashes.update { it + 1 }
+            is BranchEvent.BranchClosed, is BranchEvent.SessionComplete -> _closeFlashes.update { it + 1 }
             else -> Unit
         }
 

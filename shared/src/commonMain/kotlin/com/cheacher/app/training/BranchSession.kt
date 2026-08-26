@@ -155,7 +155,8 @@ sealed interface BranchEvent {
     /** A real repertoire move behind the frontier. The door rattles; nothing is lost. */
     data class Locked(val node: TreeNode) : BranchEvent
 
-    data object SessionComplete : BranchEvent
+    /** The final line closed; [leaf] lets the board show its completed position. */
+    data class SessionComplete(val leaf: TreeNode) : BranchEvent
 }
 
 /**
@@ -164,7 +165,7 @@ sealed interface BranchEvent {
  * The three interesting outcomes all live here: advance, close-and-snap, and miss.
  */
 fun BranchState.submit(move: Move): BranchState {
-    if (finished) return copy(lastEvent = BranchEvent.SessionComplete)
+    if (finished) return this
 
     val children = tree.childrenOf(cursor)
     val match = children.firstOrNull { it.move == move }
@@ -265,7 +266,7 @@ private fun BranchState.close(node: TreeNode, status: NodeStatus): BranchState {
     val junction = if (rootClosed) null else nearestOpenJunction(node, updated)
 
     val closeEvent = if (rootClosed) {
-        BranchEvent.SessionComplete
+        BranchEvent.SessionComplete(node)
     } else {
         BranchEvent.BranchClosed(node, junction)
     }
