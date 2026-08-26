@@ -1,6 +1,8 @@
 package com.cheacher.app.ui.board
 
 import androidx.compose.ui.geometry.Offset
+import com.cheacher.app.chess.Color
+import com.cheacher.app.chess.Position
 import com.cheacher.app.chess.Squares
 import kotlin.math.PI
 import kotlin.math.abs
@@ -19,6 +21,18 @@ import kotlin.math.sqrt
  * inscribed while it goes round.
  */
 internal object BoardTurn {
+
+    /** The timeline index encoded by a FEN position: White-to-move is the start of a ply. */
+    fun plyIndex(position: Position): Int =
+        (position.fullmoveNumber - 1) * 2 + if (position.sideToMove == Color.BLACK) 1 else 0
+
+    /**
+     * A changed position that does not move chess time forward is a reset. Equal ply
+     * indices matter in one-sided practice: snapping back and auto-playing the reply can
+     * land on a sibling position at the same depth. Ordinary moves always advance.
+     */
+    fun isReset(previous: Position, next: Position): Boolean =
+        next != previous && plyIndex(next) <= plyIndex(previous)
 
     /** The top-left corner of [square] in the board's own frame. */
     fun squareOrigin(square: Int, squarePx: Float): Offset = Offset(
@@ -52,12 +66,13 @@ internal object BoardTurn {
      */
     fun scaleAt(degrees: Float): Float {
         val radians = degrees * (PI.toFloat() / 180f)
-        return if (degrees in 45f..135f) MIN_SCALE else inscribedScale(radians)
+        return if (degrees in 45f..135f) minimumScale else inscribedScale(radians)
     }
 
     /** How far a square must shrink to stay inside its own bounding box at [radians]. */
     fun inscribedScale(radians: Float): Float =
         1f / (abs(cos(radians)) + abs(sin(radians)))
 
-    private val MIN_SCALE = 1f / sqrt(2f)
+    /** A square at this scale can turn through any angle without leaving its frame. */
+    val minimumScale = 1f / sqrt(2f)
 }

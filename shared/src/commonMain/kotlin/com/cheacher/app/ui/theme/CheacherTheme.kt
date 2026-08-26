@@ -1,7 +1,10 @@
 package com.cheacher.app.ui.theme
 
+import androidx.compose.animation.core.FastOutLinearInEasing
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
@@ -293,11 +296,26 @@ private val CheacherShapes = Shapes(
 
 /** One place for the app's motion voice: springy, physical, never linear. */
 object Motion {
+    /** Long enough to register the completed position before the board clears it. */
+    const val boardSuccessHoldMillis = 280L
+
     /** Pieces gliding between squares. */
     val pieceTravel = spring<Offset>(dampingRatio = 0.72f, stiffness = Spring.StiffnessMediumLow)
 
     /** The board turning to the other chair — slow enough to read as one rotation. */
     val tableTurn = spring<Float>(dampingRatio = 0.85f, stiffness = Spring.StiffnessLow)
+
+    /** The tiny move against the grain that winds up a board reset. */
+    val boardResetRev = tween<Float>(durationMillis = 70, easing = FastOutLinearInEasing)
+
+    /** One quick release of the wound-up board, carrying every piece along its arc. */
+    val boardResetSpin = tween<Float>(durationMillis = 390, easing = FastOutSlowInEasing)
+
+    /** The board growing back into the frame after the spinning mass has settled. */
+    val boardResetLand = tween<Float>(durationMillis = 90, easing = FastOutSlowInEasing)
+
+    /** Any chair change during a reset must land before the reset itself does. */
+    val boardResetTurn = tween<Float>(durationMillis = 460, easing = FastOutSlowInEasing)
 
     /** Cards, chips, reveals. */
     fun <T> settle() = spring<T>(dampingRatio = 0.8f, stiffness = Spring.StiffnessMedium)

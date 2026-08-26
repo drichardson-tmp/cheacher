@@ -139,6 +139,7 @@ class BranchSessionTest {
         state = state.submit(move("g1f3")) // closes line one; snap to e4, then auto ...c5
         assertEquals("0.1", state.cursorId)
         assertEquals(Color.WHITE, state.position.sideToMove)
+        assertIs<BranchEvent.BranchClosed>(state.lastEvent, "auto-reply must not hide the close celebration")
 
         state = state.submit(move("g1f3")) // closes line two: done
         assertTrue(state.finished)
