@@ -30,6 +30,12 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.text.TextMeasurer
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.drawText
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -45,7 +51,11 @@ import com.cheacher.app.ui.theme.CheacherColors
 import com.cheacher.app.ui.theme.CheacherTheme
 import com.cheacher.app.ui.theme.Motion
 import com.cheacher.app.chess.Color as ChessColor
+import kotlin.math.PI
+import kotlin.math.abs
+import kotlin.math.cos
 import kotlin.math.roundToInt
+import kotlin.math.sin
 
 /**
  * The board: tap a piece, see its legal squares, tap a destination — or just drag the
@@ -56,6 +66,11 @@ import kotlin.math.roundToInt
  * the *right* move is the trainers' business. Pieces glide between squares on springs;
  * how they look is delegated to [PieceRenderer] so glyphs can later be swapped for
  * real vector assets without touching this file.
+ *
+ * Changing [orientation] *turns the table*: every piece and highlight swings around the
+ * board's centre to the mirrored square, like rotating a physical board 180°. The
+ * checker pattern is symmetric under that turn, so the wood itself never moves — only
+ * what sits on it. Coordinates fade through the turn and come back relabelled.
  *
  * @param shakeTrigger increment to play the wrong-move shake (a rejected idea should
  *   *feel* rejected, not just be silently ignored).
@@ -95,8 +110,17 @@ fun ChessBoardView(
         }
     }
 
+    // The table turn, as one angle: 0° is white at the bottom, 180° is black. Everything
+    // placed on the board rides this rotation, so the flip is a single sweeping motion.
+    val flipDegrees by animateFloatAsState(
+        targetValue = if (orientation == ChessColor.WHITE) 0f else 180f,
+        animationSpec = Motion.tableTurn,
+        label = "board-flip",
+    )
+
     val pieces = rememberTrackedPieces(position)
     val colors = CheacherTheme.colors
+    val textMeasurer = rememberTextMeasurer()
 
     BoxWithConstraints(
         modifier = modifier
@@ -107,13 +131,20 @@ fun ChessBoardView(
         val density = LocalDensity.current
         val squarePx = with(density) { maxWidth.toPx() } / 8f
         val squareDp = maxWidth / 8
+        val boardPx = squarePx * 8f
 
+        // A square's centre in white orientation, swung around the board centre by the
+        // flip angle. At 180° this lands exactly on the black-orientation layout.
+        val flipRadians = flipDegrees * (PI.toFloat() / 180f)
+        val flipCos = cos(flipRadians)
+        val flipSin = sin(flipRadians)
         fun screenOffset(square: Int): Offset {
-            val file = Squares.fileOf(square)
-            val rank = Squares.rankOf(square)
-            val x = if (orientation == ChessColor.WHITE) file else 7 - file
-            val y = if (orientation == ChessColor.WHITE) 7 - rank else rank
-            return Offset(x * squarePx, y * squarePx)
+            val cx = Squares.fileOf(square) * squarePx + squarePx / 2 - boardPx / 2
+            val cy = (7 - Squares.rankOf(square)) * squarePx + squarePx / 2 - boardPx / 2
+            return Offset(
+                cx * flipCos - cy * flipSin + boardPx / 2 - squarePx / 2,
+                cx * flipSin + cy * flipCos + boardPx / 2 - squarePx / 2,
+            )
         }
 
         // Null off the board: a drag released past the edge is a cancelled move, not a
@@ -127,10 +158,12 @@ fun ChessBoardView(
             return Squares.of(file, rank)
         }
 
+        val coordinateLayouts = rememberCoordinateLayouts(textMeasurer, squarePx)
         val hovered = drag?.let { squareAt(it.pointer) }
 
         Canvas(modifier = Modifier.fillMaxSize()) {
-            drawSquares(squarePx, orientation, colors)
+            drawSquares(squarePx, colors)
+            drawCoordinates(coordinateLayouts, squarePx, flipDegrees, colors)
             lastMove?.let {
                 drawSquareFill(screenOffset(it.from), squarePx, colors.lastMoveGlow)
                 drawSquareFill(screenOffset(it.to), squarePx, colors.lastMoveGlow)
@@ -274,18 +307,78 @@ fun ChessBoardView(
     }
 }
 
-private fun DrawScope.drawSquares(squarePx: Float, orientation: ChessColor, colors: CheacherColors) {
+// The checker pattern is its own 180°-rotation image, so the wood needs no orientation:
+// a screen cell's colour is the same from either chair.
+private fun DrawScope.drawSquares(squarePx: Float, colors: CheacherColors) {
     for (x in 0..7) {
         for (y in 0..7) {
-            val file = if (orientation == ChessColor.WHITE) x else 7 - x
-            val rank = if (orientation == ChessColor.WHITE) 7 - y else y
-            val light = (file + rank) % 2 == 1
+            val light = (x + y) % 2 == 0
             drawRect(
                 color = if (light) colors.boardLight else colors.boardDark,
                 topLeft = Offset(x * squarePx, y * squarePx),
                 size = Size(squarePx, squarePx),
             )
         }
+    }
+}
+
+/**
+ * One measured layout per coordinate glyph, re-measured only when the board is resized —
+ * sixteen labels per frame is a draw, not a layout.
+ */
+@Composable
+private fun rememberCoordinateLayouts(
+    textMeasurer: TextMeasurer,
+    squarePx: Float,
+): Map<Char, TextLayoutResult> {
+    val density = LocalDensity.current
+    return remember(textMeasurer, squarePx) {
+        val style = TextStyle(
+            fontSize = with(density) { (squarePx * 0.21f).toSp() },
+            fontWeight = FontWeight.SemiBold,
+        )
+        "abcdefgh12345678".associateWith { textMeasurer.measure(it.toString(), style) }
+    }
+}
+
+/**
+ * Files along the bottom edge, ranks up the left, each glyph in the opposite wood so it
+ * reads on its own square. The labels belong to whichever chair is nearest: they fade
+ * out through the table turn and come back renamed for the other side.
+ */
+private fun DrawScope.drawCoordinates(
+    layouts: Map<Char, TextLayoutResult>,
+    squarePx: Float,
+    flipDegrees: Float,
+    colors: CheacherColors,
+) {
+    val whiteChair = flipDegrees < 90f
+    val alpha = abs(cos(flipDegrees * (PI.toFloat() / 180f))) * 0.85f
+    if (alpha <= 0.02f) return
+    val pad = squarePx * 0.06f
+
+    for (x in 0..7) {
+        val layout = layouts[if (whiteChair) 'a' + x else 'h' - x] ?: continue
+        // Bottom-row cell (x, 7): light wood when x is odd.
+        drawText(
+            textLayoutResult = layout,
+            color = if (x % 2 == 1) colors.boardDark else colors.boardLight,
+            topLeft = Offset(
+                (x + 1) * squarePx - layout.size.width - pad,
+                squarePx * 8 - layout.size.height - pad * 0.5f,
+            ),
+            alpha = alpha,
+        )
+    }
+    for (y in 0..7) {
+        val layout = layouts[if (whiteChair) '0' + (8 - y) else '1' + y] ?: continue
+        // Left-column cell (0, y): light wood when y is even.
+        drawText(
+            textLayoutResult = layout,
+            color = if (y % 2 == 0) colors.boardDark else colors.boardLight,
+            topLeft = Offset(pad, y * squarePx + pad * 0.5f),
+            alpha = alpha,
+        )
     }
 }
 

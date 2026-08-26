@@ -13,29 +13,48 @@ import com.cheacher.app.domain.TreeNode
  * and has to find it on the board. Get it wrong and the one-sentence idea unlocks
  * underneath. Lines are walked root-to-leaf, one at a time, from both sides.
  *
+ * Every walked line banks a **credit**: 1.0 found unaided, 0.5 found with the hint
+ * (asked for or earned by a miss — a wrong move reveals the idea, so it can never score
+ * above a hint), 0.0 after a wrong move. With [masteryLoop] on, finishing the deal is
+ * not finishing the session: imperfect lines are re-dealt, pass after pass, until every
+ * line has one clean unaided walk — the depth-first traversal unwinds until everything
+ * is accounted for.
+ *
  * Pure state: [submit] returns a new [GuidedState] and touches nothing else, so the whole
  * mode is testable without a board, a clock, or a coroutine.
  */
 data class GuidedState(
     val tree: OpeningTree,
     /**
-     * Which of [OpeningTree.lines] this session walks, in order. Null means the whole
-     * book; progression mode passes the frontier line so the session is "replay the
-     * shared prefix you know, then learn the new fork". Chosen at [start] and immutable
-     * after — a session's syllabus does not change under the learner's feet.
+     * Which of [OpeningTree.lines] this session is about, in order. Null means the whole
+     * book; the study plan passes the not-yet-accounted lines. Chosen at [start] and
+     * immutable after — a session's syllabus does not change under the learner's feet.
      */
     val lineIndices: List<Int>? = null,
+    /** True keeps re-dealing imperfect lines until every dealt line has a clean pass. */
+    val masteryLoop: Boolean = false,
+    /** The current pass's absolute line indices. The first pass is the whole [deal]. */
+    val passLines: List<Int> = emptyList(),
     val lineIndex: Int = 0,
     val plyIndex: Int = 0,
     /** True once the human-language hint has been unlocked for the current move. */
     val ideaRevealed: Boolean = false,
     val wrongAttempts: Int = 0,
+    /** True once the hint has been seen anywhere on the current line's walk — the ½-point flag. */
+    val lineAided: Boolean = false,
+    /** True once a wrong move has been played anywhere on the current line's walk. */
+    val lineMissed: Boolean = false,
+    /** Absolute line index → the credit its most recent walk earned this session. */
+    val lineCredits: Map<Int, Double> = emptyMap(),
     val lastEvent: GuidedEvent? = null,
     val finished: Boolean = false,
 ) {
-    /** The lines this session walks, in authored order. */
+    /** Every line this session is responsible for — the score's denominator. */
+    val deal: List<Int> get() = lineIndices ?: tree.lines.indices.toList()
+
+    /** The lines of the current pass, in authored (DFS) order. */
     val lines: List<List<TreeNode>>
-        get() = lineIndices?.map { tree.lines[it] } ?: tree.lines
+        get() = passLines.map { tree.lines[it] }
 
     val currentLine: List<TreeNode> get() = lines.getOrElse(lineIndex) { emptyList() }
 
@@ -48,6 +67,20 @@ data class GuidedState(
 
     /** Moves already played in this line — the ones drawn on the move strip. */
     val played: List<TreeNode> get() = currentLine.take(plyIndex)
+
+    /** What the walk of the current line has earned so far, by the credit rule. */
+    val currentLineCredit: Double
+        get() = when {
+            lineMissed -> 0.0
+            lineAided -> 0.5
+            else -> 1.0
+        }
+
+    /** Session score over the whole [deal] — "3½ of 6 accounted". */
+    val sessionScore: Double get() = deal.sumOf { lineCredits[it] ?: 0.0 }
+
+    /** True when every dealt line's latest walk this session was clean and unaided. */
+    val allClean: Boolean get() = deal.all { (lineCredits[it] ?: 0.0) >= 1.0 }
 
     val prompt: GuidedPrompt?
         get() = expected?.let {
@@ -69,9 +102,19 @@ data class GuidedState(
 
     companion object {
         /** [lineIndices] restricts the session to those lines; null walks the whole book. */
-        fun start(tree: OpeningTree, lineIndices: List<Int>? = null): GuidedState {
-            val state = GuidedState(tree = tree, lineIndices = lineIndices)
-            return state.copy(finished = state.lines.isEmpty())
+        fun start(
+            tree: OpeningTree,
+            lineIndices: List<Int>? = null,
+            masteryLoop: Boolean = false,
+        ): GuidedState {
+            val deal = lineIndices ?: tree.lines.indices.toList()
+            return GuidedState(
+                tree = tree,
+                lineIndices = lineIndices,
+                masteryLoop = masteryLoop,
+                passLines = deal,
+                finished = deal.isEmpty(),
+            )
         }
     }
 }
@@ -97,8 +140,8 @@ sealed interface GuidedEvent {
     /** A legal but unwanted move. [idea] is non-null once the allowance has been spent. */
     data class Wrong(val played: Move, val expected: TreeNode, val idea: String?) : GuidedEvent
 
-    /** The whole line was walked; the next line is now loaded. */
-    data class LineComplete(val line: List<TreeNode>) : GuidedEvent
+    /** The whole line was walked and banked [credit]; the next line is now loaded. */
+    data class LineComplete(val line: List<TreeNode>, val credit: Double = 1.0) : GuidedEvent
 
     data object SessionComplete : GuidedEvent
 }
@@ -116,6 +159,8 @@ fun GuidedState.submit(move: Move): GuidedState {
         return copy(
             wrongAttempts = wrongAttempts + 1,
             ideaRevealed = true,
+            lineAided = true,
+            lineMissed = true,
             lastEvent = GuidedEvent.Wrong(move, target, target.idea.takeIf { it.isNotBlank() }),
         )
     }
@@ -130,30 +175,47 @@ fun GuidedState.submit(move: Move): GuidedState {
         )
     }
 
+    // Line finished: bank its credit, then load the next line — of this pass, or of the
+    // re-deal the mastery loop owes.
     val finishedLine = currentLine
-    val nextLine = lineIndex + 1
-    return if (nextLine < lines.size) {
-        copy(
-            lineIndex = nextLine,
-            plyIndex = 0,
-            ideaRevealed = false,
-            wrongAttempts = 0,
-            lastEvent = GuidedEvent.LineComplete(finishedLine),
-        )
+    val credit = currentLineCredit
+    val banked = lineCredits + (passLines[lineIndex] to credit)
+    val walkedNext = copy(
+        plyIndex = 0,
+        ideaRevealed = false,
+        wrongAttempts = 0,
+        lineAided = false,
+        lineMissed = false,
+        lineCredits = banked,
+        lastEvent = GuidedEvent.LineComplete(finishedLine, credit),
+    )
+
+    if (lineIndex + 1 < lines.size) return walkedNext.copy(lineIndex = lineIndex + 1)
+
+    // End of the pass. The loop re-deals every line still short of a clean walk; the
+    // re-dealt walk starts fresh, so the next pass is the clean shot.
+    val retry = if (masteryLoop) deal.filter { (banked[it] ?: 0.0) < 1.0 } else emptyList()
+    return if (retry.isNotEmpty()) {
+        walkedNext.copy(passLines = retry, lineIndex = 0)
     } else {
-        copy(
+        walkedNext.copy(
             plyIndex = nextPly,
-            ideaRevealed = false,
-            wrongAttempts = 0,
             finished = true,
             lastEvent = GuidedEvent.SessionComplete,
         )
     }
 }
 
-/** Spends the human-language allowance on demand, without costing a wrong attempt. */
-fun GuidedState.revealIdea(): GuidedState = copy(ideaRevealed = true)
+/**
+ * Spends the human-language allowance on demand, without costing a wrong attempt — but
+ * the walk is aided now, and an aided line banks half a point.
+ */
+fun GuidedState.revealIdea(): GuidedState = copy(ideaRevealed = true, lineAided = true)
 
-/** Drops the learner back to the start of the current line. */
+/**
+ * Drops the learner back to the start of the current line. The board resets; the walk's
+ * aided/missed flags do not — you have seen the answers, so the clean shot is the
+ * re-deal, not the rewind.
+ */
 fun GuidedState.restartLine(): GuidedState =
     copy(plyIndex = 0, ideaRevealed = false, wrongAttempts = 0, lastEvent = null)

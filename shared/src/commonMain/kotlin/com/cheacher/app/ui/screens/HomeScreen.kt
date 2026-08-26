@@ -30,9 +30,7 @@ import com.cheacher.app.domain.OpeningTree
 import com.cheacher.app.progress.StoreHealth
 import com.cheacher.app.progress.TrainingRecord
 import com.cheacher.app.training.MistakePolicy
-import com.cheacher.app.training.Progression
-import com.cheacher.app.training.Syllabus
-import com.cheacher.app.training.syllabusAt
+import com.cheacher.app.training.OpeningStanding
 
 /**
  * The bookshelf: pick a repertoire, pick how you want to be tested.
@@ -139,7 +137,6 @@ fun HomeScreen(
                 record = records?.get(tree.repertoire.id),
                 recordsLoaded = records != null,
                 nowEpochMillis = nowEpochMillis,
-                coachPlan = !fullTree,
                 onOpenGuided = { onOpenGuided(tree) },
                 onOpenBranch = { onOpenBranch(tree) },
             )
@@ -153,7 +150,6 @@ private fun RepertoireCard(
     record: TrainingRecord?,
     recordsLoaded: Boolean,
     nowEpochMillis: Long,
-    coachPlan: Boolean,
     onOpenGuided: () -> Unit,
     onOpenBranch: () -> Unit,
 ) {
@@ -191,30 +187,23 @@ private fun RepertoireCard(
             // Progress claims wait for both content and the store's first read: an
             // unloaded record must never masquerade as a fresh learner.
             if (hasLines && recordsLoaded) {
-                val progression = remember(tree, record) {
-                    Progression(tree, record ?: TrainingRecord.empty(repertoire.id))
+                val standing = remember(tree, record) {
+                    OpeningStanding(tree, record ?: TrainingRecord.empty(repertoire.id))
                 }
+                // The credit ledger: found unaided is a point, with the hint half a point.
                 Text(
-                    text = if (progression.frontierIndex == null) {
-                        "All ${tree.lines.size} lines mastered"
-                    } else {
-                        "${progression.masteredCount} of ${tree.lines.size} lines mastered" +
-                            (progression.nextUpName?.let { " · next up: $it" } ?: "")
+                    text = when {
+                        standing.learned && standing.percent >= 100 ->
+                            "Accounted for" +
+                                if (standing.dueAtEpochMillis <= nowEpochMillis) " · review ready" else " · resting"
+                        standing.learned ->
+                            "Slipped to ${standing.percent}% · review ready"
+                        else ->
+                            "${formatHalfPoints(standing.creditTotal)} of ${tree.lines.size} lines accounted"
                     },
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.secondary,
                 )
-                // What today's session holds, in plain language — counts, never dates.
-                if (coachPlan) {
-                    val syllabus = remember(progression, nowEpochMillis) {
-                        progression.syllabusAt(nowEpochMillis)
-                    }
-                    Text(
-                        text = todayLabel(syllabus),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.tertiary,
-                    )
-                }
                 streakLabel(tree, record, nowEpochMillis)?.let { streaks ->
                     Text(
                         text = streaks,
@@ -254,21 +243,6 @@ private fun RepertoireCard(
             }
         }
     }
-}
-
-/**
- * "Today: 1 new line · 2 reviews" — what the coach's plan holds right now. Always counts,
- * never dates, and never an empty "come back later": the scheduler always deals a hand.
- * (For a non-empty tree the hand is never empty — a frontier or a review always exists —
- * and empty trees never reach this label.)
- */
-private fun todayLabel(syllabus: Syllabus): String {
-    val parts = buildList {
-        if (syllabus.newCount == 1) add("1 new line")
-        if (syllabus.reviewCount == 1) add("1 review")
-        if (syllabus.reviewCount > 1) add("${syllabus.reviewCount} reviews")
-    }
-    return "Today: ${parts.joinToString(" · ")}"
 }
 
 /**

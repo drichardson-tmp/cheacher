@@ -148,6 +148,45 @@ class TrainingRecordTest {
     }
 
     @Test
+    fun lineCreditsAreLatestWins() {
+        val record = TrainingRecord.empty("x")
+            .recordLineCredit("0.0.0", 1.0)
+            .recordLineCredit("0.0.0", 0.5) // a hinted walk yesterday outranks a clean one last month
+        assertEquals(0.5, record.creditOf("0.0.0"))
+        assertEquals(0.0, record.creditOf("0.1.0"), "never walked reads as nothing banked")
+    }
+
+    @Test
+    fun openingOutcomeStartsGrowsAndResetsTheStreak() {
+        val leaves = listOf("0.0.0", "0.1.0")
+        val half = TrainingRecord.empty("x").recordLineCredit("0.0.0", 1.0)
+        assertNull(
+            half.recordOpeningOutcome(leaves, atEpochMillis = 10L).openingReview,
+            "a partial score on a never-accounted opening cannot lapse it",
+        )
+
+        val learned = half.recordLineCredit("0.1.0", 1.0).recordOpeningOutcome(leaves, atEpochMillis = 20L)
+        assertEquals(LineReview(lastReviewedAt = 20L, streak = 1), learned.openingReview)
+
+        val reviewed = learned.recordOpeningOutcome(leaves, atEpochMillis = 30L)
+        assertEquals(LineReview(lastReviewedAt = 30L, streak = 2), reviewed.openingReview)
+
+        val slipped = reviewed.recordLineCredit("0.1.0", 0.5).recordOpeningOutcome(leaves, atEpochMillis = 40L)
+        assertEquals(LineReview(lastReviewedAt = 40L, streak = 0), slipped.openingReview)
+    }
+
+    @Test
+    fun legacyRecordWithoutCreditsStillDecodes() {
+        // A blob written before credits existed: every line reads unaccounted, so the
+        // learner re-earns the book on the new ladder — honest, and nothing is deleted.
+        val json = Json { ignoreUnknownKeys = true }
+        val blob = """{"repertoire_id":"italian","line_completions":{"0.0.0":3}}"""
+        val record = json.decodeFromString<TrainingRecord>(blob)
+        assertEquals(emptyMap(), record.lineCredits)
+        assertNull(record.openingReview)
+    }
+
+    @Test
     fun unknownJsonKeysAreIgnoredForForwardCompatibility() {
         val json = Json { ignoreUnknownKeys = true }
         val blob = """{"repertoire_id":"x","miss_counts":{"0.1":4},"future_field":true}"""

@@ -7,10 +7,13 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -27,7 +30,10 @@ import com.cheacher.app.progress.StoreHealth
 import com.cheacher.app.progress.TrainingRecord
 import com.cheacher.app.progress.currentEpochMillis
 import com.cheacher.app.training.MistakePolicy
+import com.cheacher.app.training.OpeningStanding
 import com.cheacher.app.training.Progression
+import com.cheacher.app.training.StudyKind
+import com.cheacher.app.training.studyPlan
 import com.cheacher.app.training.syllabusAt
 import com.cheacher.app.ui.screens.BranchScreen
 import com.cheacher.app.ui.screens.BranchViewModel
@@ -48,21 +54,27 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 /**
- * Where the learner is. A sealed value instead of a nav library: three screens, one
- * enum-with-data. Session screens carry their progression gate ([Guided.lineIndices],
- * [Branch.allowedNodeIds]) as a *snapshot taken at navigation time* — a session's
- * syllabus must not shift because a record update landed mid-round, and a moved
- * frontier simply produces a new screen value (and a fresh session model) next visit.
+ * Where the learner is. A sealed value instead of a nav library: a splash beat, the
+ * shelf, and two session screens. Session screens carry their study-plan gate
+ * ([Guided.lineIndices], [Branch.allowedNodeIds]) as a *snapshot taken at navigation
+ * time* — a session's deal must not shift because a record update landed mid-round, and
+ * a moved frontier simply produces a new screen value (and a fresh session model) next
+ * visit.
  */
 sealed interface Screen {
+    /** The launch beat: records are loading and the first session is being dealt. */
+    data object Dealing : Screen
+
     data object Home : Screen
 
     data class Guided(
         val repertoireId: String,
         /** Null walks the whole book; otherwise exactly these lines. */
         val lineIndices: List<Int>?,
-        /** Which of [lineIndices] are reviews — the session's subtle "seen before" marker. */
-        val reviewLineIndices: Set<Int> = emptySet(),
+        /** Whether this session is study or retrieval — it sets the rules and the copy. */
+        val kind: StudyKind,
+        /** Distinguishes consecutive deals of the same opening, so Continue always restarts. */
+        val serial: Int = 0,
     ) : Screen
 
     data class Branch(
@@ -101,8 +113,11 @@ class RootViewModel(val progress: ProgressStore) : ViewModel() {
     val storeHealth: StateFlow<StoreHealth> =
         progress.health.stateIn(viewModelScope, SharingStarted.Eagerly, StoreHealth())
 
-    private val _screen = MutableStateFlow<Screen>(Screen.Home)
+    private val _screen = MutableStateFlow<Screen>(Screen.Dealing)
     val screen: StateFlow<Screen> = _screen.asStateFlow()
+
+    /** Monotonic deal counter — consecutive deals of the same opening must still be new screens. */
+    private var dealSerial = 0
 
     private val _policy = MutableStateFlow(MistakePolicy.STRICT)
     val policy: StateFlow<MistakePolicy> = _policy.asStateFlow()
@@ -119,6 +134,14 @@ class RootViewModel(val progress: ProgressStore) : ViewModel() {
 
     /** Journal writes still in flight — navigation waits for zero so syllabi never lag truth. */
     private val pendingJournalWrites = MutableStateFlow(0)
+
+    init {
+        // Straight to the board: the app opens mid-study, never on a menu. This block
+        // sits below every property deal() touches — viewModelScope.launch on the
+        // immediate main dispatcher runs the coroutine body during construction, so an
+        // earlier init would read pendingJournalWrites before it exists.
+        deal()
+    }
 
     fun tree(id: String): OpeningTree = trees.first { it.repertoire.id == id }
 
@@ -160,18 +183,32 @@ class RootViewModel(val progress: ProgressStore) : ViewModel() {
         return all[tree.repertoire.id] ?: TrainingRecord.empty(tree.repertoire.id)
     }
 
+    /**
+     * Deals the next session from the shelf-wide study plan: due opening reviews first,
+     * then the first unlearned opening's remaining lines. Called at launch and by every
+     * "Continue" — the learner rides the plan without ever choosing from a list.
+     */
+    fun deal() {
+        viewModelScope.launch {
+            pendingJournalWrites.first { it == 0 }
+            val all = records.filterNotNull().first()
+            val task = studyPlan(trees, all, currentEpochMillis()).firstOrNull()
+            _screen.value = task?.let {
+                Screen.Guided(it.tree.repertoire.id, it.lineIndices, it.kind, serial = ++dealSerial)
+            } ?: Screen.Home
+        }
+    }
+
     fun openGuided(tree: OpeningTree) {
         viewModelScope.launch {
-            if (_fullTree.value) {
-                _screen.value = Screen.Guided(tree.repertoire.id, lineIndices = null)
-                return@launch
+            val standing = OpeningStanding(tree, settledRecordFor(tree))
+            val kind = if (standing.learned) StudyKind.REVIEW else StudyKind.LEARN
+            val lineIndices = when {
+                _fullTree.value -> null
+                kind == StudyKind.LEARN -> standing.learnDeal
+                else -> null
             }
-            val syllabus = Progression(tree, settledRecordFor(tree)).syllabusAt(currentEpochMillis())
-            _screen.value = Screen.Guided(
-                repertoireId = tree.repertoire.id,
-                lineIndices = syllabus.guidedLineIndices,
-                reviewLineIndices = syllabus.reviewLineIndices,
-            )
+            _screen.value = Screen.Guided(tree.repertoire.id, lineIndices, kind, serial = ++dealSerial)
         }
     }
 
@@ -220,6 +257,9 @@ fun App() {
                 .safeDrawingPadding(),
         ) { current ->
             when (current) {
+                // The launch beat: just the wordmark on parchment while the first deal lands.
+                is Screen.Dealing -> DealingScreen()
+
                 is Screen.Home -> HomeScreen(
                     trees = root.trees,
                     records = records,
@@ -241,11 +281,18 @@ fun App() {
                     // gone with it, so a later visit can never resume a finished session.
                     val sessionScope = rememberCoroutineScope()
                     val vm = remember(current) {
-                        GuidedViewModel(tree, root.progress, current.lineIndices, sessionScope, root.journalFor(tree))
+                        GuidedViewModel(
+                            tree = tree,
+                            progress = root.progress,
+                            lineIndices = current.lineIndices,
+                            kind = current.kind,
+                            scope = sessionScope,
+                            journal = root.journalFor(tree),
+                        )
                     }
                     GuidedScreen(
                         viewModel = vm,
-                        reviewLineIndices = current.reviewLineIndices,
+                        onContinue = root::deal,
                         onBack = root::home,
                     )
                 }
@@ -269,5 +316,17 @@ fun App() {
                 }
             }
         }
+    }
+}
+
+/**
+ * What shows for the beat between launch and the first dealt board: the wordmark alone.
+ * Deliberately not a spinner — the store read is fast, and a flash of quiet parchment
+ * reads as intent, not latency.
+ */
+@Composable
+private fun DealingScreen() {
+    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Text("Cheacher", style = MaterialTheme.typography.displaySmall)
     }
 }

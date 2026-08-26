@@ -296,6 +296,9 @@ object Motion {
     /** Pieces gliding between squares. */
     val pieceTravel = spring<Offset>(dampingRatio = 0.72f, stiffness = Spring.StiffnessMediumLow)
 
+    /** The board turning to the other chair — slow enough to read as one rotation. */
+    val tableTurn = spring<Float>(dampingRatio = 0.85f, stiffness = Spring.StiffnessLow)
+
     /** Cards, chips, reveals. */
     fun <T> settle() = spring<T>(dampingRatio = 0.8f, stiffness = Spring.StiffnessMedium)
 

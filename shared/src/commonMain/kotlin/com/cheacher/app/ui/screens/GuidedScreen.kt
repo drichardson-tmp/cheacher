@@ -40,10 +40,12 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.cheacher.app.chess.Color as ChessColor
 import com.cheacher.app.domain.TreeNode
+import com.cheacher.app.training.StudyKind
 import com.cheacher.app.ui.board.ChessBoardView
 import com.cheacher.app.ui.theme.CheacherTheme
 import com.cheacher.app.ui.theme.Motion
 import kotlinx.coroutines.delay
+import kotlin.math.roundToInt
 
 /**
  * Phase 1 — the name *is* the prompt.
@@ -51,18 +53,21 @@ import kotlinx.coroutines.delay
  * The canonical name sits above the board in big serif type, the one-sentence idea
  * unfolds beneath it only when earned (a miss) or asked for. Everything else on the
  * screen is quiet: this mode is about binding vocabulary to squares.
+ *
+ * The board sits with the side to move at the bottom, turning over between prompts —
+ * you learn the black moves from black's chair.
  */
 @Composable
 fun GuidedScreen(
     viewModel: GuidedViewModel,
     onBack: () -> Unit,
-    /** Absolute line indices that are reviews on today's syllabus — marked, never blocked. */
-    reviewLineIndices: Set<Int> = emptySet(),
+    /** Deals the next session on the study plan — the "pop to the next book" moment. */
+    onContinue: () -> Unit,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val shakes by viewModel.wrongShakes.collectAsStateWithLifecycle()
     val unlock by viewModel.unlock.collectAsStateWithLifecycle()
-    val perspective = state.tree.repertoire.perspective
+    val isReview = viewModel.kind == StudyKind.REVIEW
 
     Column(
         modifier = Modifier
@@ -74,14 +79,11 @@ fun GuidedScreen(
         Row(verticalAlignment = Alignment.CenterVertically) {
             TextButton(onClick = onBack) { Text("← Shelf") }
             Spacer(Modifier.weight(1f))
-            // The one-word marker that this line is retrieval practice, not news.
-            val absoluteLine = state.lineIndices?.getOrNull(state.lineIndex)
-            val isReview = absoluteLine != null && absoluteLine in reviewLineIndices
+            // Which book is open, and whether this visit is retrieval practice, not news.
             Text(
-                "Line ${state.progress.lineNumber} of ${state.progress.lineCount}" +
-                    if (isReview) " · review" else "",
+                state.tree.repertoire.title + if (isReview) " · review" else "",
                 style = MaterialTheme.typography.labelMedium,
-                // Review lines are marked in the cool wash — retrieval practice, not news.
+                // Reviews are marked in the cool wash — retrieval practice, not news.
                 color = if (isReview) CheacherTheme.colors.reviewTint else MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
@@ -89,12 +91,32 @@ fun GuidedScreen(
         UnlockBannerCard(banner = unlock, onDismiss = viewModel::dismissUnlock)
 
         if (state.finished) {
-            SessionCompleteCard(
-                title = "Every name found.",
-                subtitle = "You walked all ${state.progress.lineCount} lines of ${state.tree.repertoire.title}.",
-                onAgain = viewModel::restartSession,
-                onBack = onBack,
-            )
+            val dealt = state.deal.size
+            if (isReview) {
+                val percent = if (dealt == 0) 100 else (state.sessionScore / dealt * 100).roundToInt()
+                SessionCompleteCard(
+                    title = if (state.allClean) "Still yours." else "It slipped to $percent%.",
+                    subtitle = if (state.allClean) {
+                        "All $dealt lines of ${state.tree.repertoire.title}, unaided. " +
+                            "It comes back later, and rarer."
+                    } else {
+                        "${formatHalfPoints(state.sessionScore)} of $dealt lines held. " +
+                            "This book comes back sooner now."
+                    },
+                    primaryLabel = "Continue",
+                    onPrimary = onContinue,
+                    onBack = onBack,
+                )
+            } else {
+                SessionCompleteCard(
+                    title = "Opening accounted.",
+                    subtitle = "Every line of ${state.tree.repertoire.title} found unaided. " +
+                        "On to the next book.",
+                    primaryLabel = "Continue",
+                    onPrimary = onContinue,
+                    onBack = onBack,
+                )
+            }
         } else {
             state.prompt?.let { prompt ->
                 Card(
@@ -144,7 +166,8 @@ fun GuidedScreen(
             ChessBoardView(
                 position = state.position,
                 lastMove = state.played.lastOrNull()?.move,
-                orientation = perspective,
+                // The chair follows the prompt: black's moves are learned from black's side.
+                orientation = state.prompt?.mover ?: state.tree.repertoire.perspective,
                 onMove = viewModel::onMove,
                 shakeTrigger = shakes,
                 modifier = Modifier.fillMaxWidth(),
@@ -161,10 +184,37 @@ fun GuidedScreen(
                 color = MaterialTheme.colorScheme.tertiary,
             )
 
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    "Line ${state.progress.lineNumber} of ${state.progress.lineCount}",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.weight(1f))
+                // The running score: a hint is half a point, a wrong move none — the deal
+                // is only accounted for when every line reads whole.
+                Text(
+                    "${formatHalfPoints(state.sessionScore)} of ${state.deal.size} accounted",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.secondary,
+                )
+            }
+
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 OutlinedButton(onClick = viewModel::restartLine) { Text("Restart line") }
             }
         }
+    }
+}
+
+/** "3½", "4", "0" — credits read as points, and half points deserve the real glyph. */
+internal fun formatHalfPoints(score: Double): String {
+    val whole = score.toInt()
+    val hasHalf = score - whole >= 0.25
+    return when {
+        whole == 0 && hasHalf -> "½"
+        hasHalf -> "$whole½"
+        else -> "$whole"
     }
 }
 
@@ -243,8 +293,9 @@ fun UnlockBannerCard(banner: UnlockBanner?, onDismiss: () -> Unit) {
 fun SessionCompleteCard(
     title: String,
     subtitle: String,
-    onAgain: () -> Unit,
+    onPrimary: () -> Unit,
     onBack: () -> Unit,
+    primaryLabel: String = "Once more",
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -255,8 +306,8 @@ fun SessionCompleteCard(
             Text(subtitle, style = MaterialTheme.typography.bodyLarge)
             Spacer(Modifier.height(4.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                Button(onClick = onAgain) { Text("Once more") }
-                OutlinedButton(onClick = onBack) { Text("Back to shelf") }
+                Button(onClick = onPrimary) { Text(primaryLabel) }
+                OutlinedButton(onClick = onBack) { Text("Shelf") }
             }
         }
     }
