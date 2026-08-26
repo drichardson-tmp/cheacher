@@ -115,6 +115,13 @@ data class TrainingRecord(
     /** Defaulted so records written before play-out existed still decode. */
     @SerialName("sparring")
     val sparring: SparringRecord = SparringRecord(),
+    /**
+     * Square-drill history. Only ever set on the reserved [DRILL_RECORD_ID] record — the
+     * drill trains board geometry, which belongs to no opening — and null everywhere
+     * else. Defaulted, so records written before the drill existed still decode.
+     */
+    @SerialName("square_drill")
+    val squareDrill: DrillRecord? = null,
 ) {
     val totalMisses: Int get() = missCounts.values.sum()
 
@@ -274,6 +281,13 @@ data class TrainingRecord(
     companion object {
         /** Miss attribution when the learner blunders before the first move of the tree. */
         const val ROOT_NODE_KEY = "root"
+
+        /**
+         * The record id the square drill saves under. Not a repertoire and never on the
+         * shelf: the shelf only ever looks records up *by* a tree's id, so a reserved key
+         * costs nothing and keeps the drill out of a second store.
+         */
+        const val DRILL_RECORD_ID = "__square_drill"
 
         /** One day of epoch-millis — the unit of both the review ladder and day streaks. */
         const val DAY_MILLIS: Long = 24L * 60 * 60 * 1000

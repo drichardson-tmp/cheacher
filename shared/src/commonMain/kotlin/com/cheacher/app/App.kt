@@ -41,6 +41,8 @@ import com.cheacher.app.ui.screens.BranchViewModel
 import com.cheacher.app.ui.screens.GuidedScreen
 import com.cheacher.app.ui.screens.GuidedViewModel
 import com.cheacher.app.ui.screens.HomeScreen
+import com.cheacher.app.ui.screens.SquareDrillScreen
+import com.cheacher.app.ui.screens.SquareDrillViewModel
 import com.cheacher.app.ui.screens.Journal
 import com.cheacher.app.ui.screens.PlayOutScreen
 import com.cheacher.app.ui.screens.PlayOutViewModel
@@ -79,6 +81,9 @@ sealed interface Screen {
         /** Distinguishes consecutive deals of the same opening, so Continue always restarts. */
         val serial: Int = 0,
     ) : Screen
+
+    /** The square drill: no repertoire, no gate, no snapshot — it belongs to no opening. */
+    data object SquareDrill : Screen
 
     data class Branch(
         val repertoireId: String,
@@ -174,8 +179,10 @@ class RootViewModel(val progress: ProgressStore) : ViewModel() {
     }
 
     /** A [Journal] for one repertoire, writing on this app-scoped ViewModel's lifetime. */
-    fun journalFor(tree: OpeningTree): Journal {
-        val repertoireId = tree.repertoire.id
+    fun journalFor(tree: OpeningTree): Journal = journalForId(tree.repertoire.id)
+
+    /** The drill saves under a reserved id rather than an opening's — see [TrainingRecord.DRILL_RECORD_ID]. */
+    fun journalForId(repertoireId: String): Journal {
         return { transform ->
             pendingJournalWrites.update { it + 1 }
             viewModelScope.launch {
@@ -246,6 +253,10 @@ class RootViewModel(val progress: ProgressStore) : ViewModel() {
         }
     }
 
+    fun openSquareDrill() {
+        _screen.value = Screen.SquareDrill
+    }
+
     fun home() {
         _screen.value = Screen.Home
     }
@@ -296,7 +307,16 @@ fun App() {
                     onFullTreeChange = root::setFullTree,
                     onOpenGuided = root::openGuided,
                     onOpenBranch = root::openBranch,
+                    onOpenSquareDrill = root::openSquareDrill,
+                    drill = records?.get(TrainingRecord.DRILL_RECORD_ID)?.squareDrill,
                 )
+
+                is Screen.SquareDrill -> {
+                    val vm = remember(current) {
+                        SquareDrillViewModel(journal = root.journalForId(TrainingRecord.DRILL_RECORD_ID))
+                    }
+                    SquareDrillScreen(viewModel = vm, onBack = root::home)
+                }
 
                 is Screen.Guided -> {
                     val tree = root.tree(current.repertoireId)

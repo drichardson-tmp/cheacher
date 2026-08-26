@@ -33,12 +33,18 @@ enum class MistakePolicy {
 }
 
 /**
- * Phase 2 — Branch Recall with visual pruning.
+ * Phase 2 — Recall.
  *
- * No names, no hints: just a board and a tree diagram. Walk a line to its end and the
- * branch closes out — dimmed on the tree, unplayable on the board — and you are snapped
- * back to the nearest junction that still has something open. The round ends when the
- * whole tree is closed.
+ * The prompt is still a name, because names are the whole point of the app; what goes
+ * away is the scaffolding. Guided mode names the line one move at a time; recall names
+ * only the *destination* — "play the Najdorf Variation" — and you walk every ply to it
+ * unaided: no per-move prompt, no idea sentence, no diagram to read the answer off.
+ *
+ * Reaching the target closes it out and the next unclosed line becomes the target, which
+ * is what makes the round feel like pruning: the book shrinks as you name your way
+ * through it. The lines come in [OpeningTree.lines] (DFS) order, so consecutive targets
+ * share the longest possible prefix and you rejoin at the fork rather than replaying the
+ * opening moves ten times.
  *
  * Like [GuidedState] this is a pure reducer; every transition is a value.
  */
@@ -65,6 +71,22 @@ data class BranchState(
 
     /** Children of the cursor that have not been closed out yet. */
     val openMoves: List<TreeNode> get() = tree.childrenOf(cursor).filterNot { statusOf(it).isClosed }
+
+    /**
+     * The line being asked for right now — the first one this round has not closed out.
+     * Its [TreeNode.name] is the prompt, and it is the only line the board will accept:
+     * with a name on screen, wandering onto a *different* real line is a wrong answer,
+     * not a shortcut.
+     */
+    val targetLeaf: TreeNode?
+        get() = tree.lines.map { it.last() }.firstOrNull { !statusOf(it).isClosed }
+
+    /** Node ids on the way to [targetLeaf], including the leaf itself. */
+    val targetPathIds: Set<String>
+        get() {
+            val leaf = targetLeaf ?: return emptySet()
+            return generateSequence(leaf) { it.parentId?.let(tree::node) }.map { it.id }.toSet()
+        }
 
     /** The path from the root to the cursor — what the move strip shows. */
     val path: List<TreeNode>
@@ -152,6 +174,10 @@ fun BranchState.submit(move: Move): BranchState {
     // just one the ladder has not reached. No strike, no snap-back, no board change.
     if (statusOf(match) == NodeStatus.LOCKED) return copy(lastEvent = BranchEvent.Locked(match))
     if (statusOf(match).isClosed) return copy(lastEvent = BranchEvent.AlreadyClosed(match))
+    // A real move, but not the one the named line asks for: the prompt said "Najdorf",
+    // so the Dragon is the wrong answer here even though it is in the book.
+    val target = targetPathIds
+    if (target.isNotEmpty() && match.id !in target) return penalise(move)
 
     val advanced = copy(
         cursorId = match.id,
@@ -167,7 +193,12 @@ private fun BranchState.autoReply(): BranchState {
     val replyFor = autoReplyFor ?: return this
     var state = this
     while (!state.finished && state.tree.sideToMoveAt(state.cursor) == replyFor) {
-        val next = state.openMoves.firstOrNull() ?: break
+        // Follow the line that is actually being asked for, so the app's own replies can
+        // never walk the learner off the target and into a miss they did not make.
+        val onTarget = state.targetPathIds
+        val next = state.openMoves.firstOrNull { it.id in onTarget }
+            ?: state.openMoves.firstOrNull()
+            ?: break
         state = state.copy(
             cursorId = next.id,
             statuses = state.statuses + (next.id to NodeStatus.IN_PROGRESS),
@@ -178,16 +209,23 @@ private fun BranchState.autoReply(): BranchState {
     return state
 }
 
+/**
+ * A miss costs *the line you were asked for* — not the whole subtree under your feet.
+ * The card said "Najdorf"; you did not produce the Najdorf; that line is lost for the
+ * round and the next name comes up. Everything else in the book is still on the table,
+ * which is what makes one slip at move one survivable.
+ */
 private fun BranchState.penalise(move: Move): BranchState {
     val forgiving = policy == MistakePolicy.ONE_ALLOWANCE && strikes == 0
     if (forgiving) return copy(strikes = 1, lastEvent = BranchEvent.Missed(move, 1))
 
     val here = cursor
-    return if (here == null) {
-        // Nothing to close at the root: just reject the move.
+    val doomed = targetLeaf
+    return if (here == null || doomed == null) {
+        // Nothing played yet: reject the move rather than spend a line on it.
         copy(strikes = strikes + 1, lastEvent = BranchEvent.Missed(move, strikes + 1))
     } else {
-        val closed = close(here, NodeStatus.FAILED)
+        val closed = close(doomed, NodeStatus.FAILED)
         closed.copy(
             lastEvent = BranchEvent.BranchFailed(move, here, closed.cursor),
         )
@@ -216,7 +254,10 @@ private fun BranchState.close(node: TreeNode, status: NodeStatus): BranchState {
     while (ancestor != null) {
         val allClosed = ancestor.children.all { updated[it.id]?.isClosed == true }
         if (!allClosed) break
-        updated[ancestor.id] = NodeStatus.COMPLETED
+        // A junction is only green if nothing under it was lost; one failed child below
+        // and the whole fork reads as failed on the end-of-round tree.
+        val anyFailed = ancestor.children.any { updated[it.id] == NodeStatus.FAILED }
+        updated[ancestor.id] = if (anyFailed) NodeStatus.FAILED else NodeStatus.COMPLETED
         ancestor = ancestor.parentId?.let(tree::node)
     }
 

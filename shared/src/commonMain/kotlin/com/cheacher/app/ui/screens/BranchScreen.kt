@@ -29,6 +29,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import com.cheacher.app.chess.Color as ChessColor
 import com.cheacher.app.training.MistakePolicy
 import com.cheacher.app.ui.board.ChessBoardView
 import com.cheacher.app.ui.theme.CheacherTheme
@@ -36,12 +39,13 @@ import com.cheacher.app.ui.theme.Motion
 import com.cheacher.app.ui.tree.VariationTreeView
 
 /**
- * Phase 2 — no names, no words, just the tree.
+ * Phase 2 — the name, and nothing else.
  *
- * The diagram under the board is the whole interface: play a line to its end and watch
- * its branch dim out, then find yourself snapped back to the last junction that still
- * has an open door. The green wash celebrates a banked branch; the red shake needs no
- * caption.
+ * One line is named above the board and you have to produce all of it: no per-move
+ * prompt, no idea sentence, no coordinates, and — while you are playing — no diagram,
+ * because a diagram of the tree is a picture of the answer. The green wash celebrates a
+ * banked line; the red shake needs no caption. The tree only comes out at the end, as a
+ * map of what you just walked.
  */
 @Composable
 fun BranchScreen(
@@ -112,6 +116,10 @@ fun BranchScreen(
             )
         }
 
+        state.targetLeaf?.takeIf { !state.finished }?.let { target ->
+            TargetCard(name = target.name, mover = state.tree.sideToMoveAt(state.cursor))
+        }
+
         Box(Modifier.fillMaxWidth()) {
             ChessBoardView(
                 position = state.position,
@@ -120,6 +128,8 @@ fun BranchScreen(
                 onMove = viewModel::onMove,
                 enabled = !state.finished,
                 shakeTrigger = shakes,
+                // Recall is unaided: the grid comes off the board once the names are learned.
+                showCoordinates = false,
                 modifier = Modifier.fillMaxWidth(),
             )
             Box(
@@ -132,17 +142,22 @@ fun BranchScreen(
 
         MoveStrip(played = state.path)
 
-        Text(
-            "THE TREE",
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        VariationTreeView(
-            tree = state.tree,
-            statusOf = state::statusOf,
-            cursorId = state.cursorId,
-            modifier = Modifier.fillMaxWidth(),
-        )
+        // The map, once the walking is done: every line by name, green for banked and
+        // red for lost. Reading it mid-round would just be reading the answers.
+        if (state.finished) {
+            Text(
+                "THE TREE",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            VariationTreeView(
+                tree = state.tree,
+                statusOf = state::statusOf,
+                cursorId = null,
+                showNames = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
 
         if (!state.finished && state.cursor != null) {
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -150,6 +165,30 @@ fun BranchScreen(
                     Text("Back to junction")
                 }
             }
+        }
+    }
+}
+
+/**
+ * The whole prompt: one name, in the same serif weight guided mode gives it, plus whose
+ * move it is. No move number — knowing you are eight plies in is a hint about how much
+ * is left, and recall should not come with a progress bar inside the line.
+ */
+@Composable
+private fun TargetCard(name: String, mover: ChessColor) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+    ) {
+        Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(
+                text = "PLAY THE LINE · " +
+                    if (mover == ChessColor.WHITE) "WHITE TO MOVE" else "BLACK TO MOVE",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.secondary,
+            )
+            Text(name, style = MaterialTheme.typography.headlineMedium)
         }
     }
 }
