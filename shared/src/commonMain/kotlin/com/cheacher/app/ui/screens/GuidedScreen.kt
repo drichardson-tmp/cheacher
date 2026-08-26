@@ -147,7 +147,7 @@ fun GuidedScreen(
                             text = "${prompt.moveNumberLabel} · " +
                                 if (prompt.mover == ChessColor.WHITE) "WHITE PLAYS" else "BLACK PLAYS",
                             style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.secondary,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                         AnimatedContent(
                             targetState = prompt.name,
@@ -214,7 +214,7 @@ fun GuidedScreen(
                 Text(
                     "${formatHalfPoints(state.sessionScore)} of ${state.deal.size} accounted",
                     style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.secondary,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
 

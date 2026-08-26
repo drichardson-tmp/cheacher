@@ -31,6 +31,7 @@ import com.cheacher.app.progress.StoreHealth
 import com.cheacher.app.progress.TrainingRecord
 import com.cheacher.app.training.MistakePolicy
 import com.cheacher.app.training.OpeningStanding
+import com.cheacher.app.ui.theme.CheacherTheme
 
 /**
  * The bookshelf: pick a repertoire, pick how you want to be tested.
@@ -175,7 +176,7 @@ private fun RepertoireCard(
                 "${tree.lines.size} lines · ${tree.allNodes.size} moves · " +
                     if (repertoire.perspective == ChessColor.WHITE) "as White" else "as Black",
                 style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.secondary,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             if (!hasLines) {
                 Text(
@@ -202,13 +203,14 @@ private fun RepertoireCard(
                             "${formatHalfPoints(standing.creditTotal)} of ${tree.lines.size} lines accounted"
                     },
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.secondary,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                // The one ember on the shelf: a live streak is the moment worth marking.
                 streakLabel(tree, record, nowEpochMillis)?.let { streaks ->
                     Text(
                         text = streaks,
                         style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.secondary,
+                        color = CheacherTheme.colors.streakAccent,
                     )
                 }
             }

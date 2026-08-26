@@ -127,7 +127,11 @@ private fun NodeChip(
             .background(fill, RoundedCornerShape(7.dp))
             .then(
                 if (isCursor) {
-                    Modifier.border(2.dp, colors.streakAccent, RoundedCornerShape(7.dp))
+                    // "You are here" is state, not a moment, so the cursor wears the node's own
+                    // ink rather than the accent. Using [onFill] also means the ring inherits
+                    // the fill/text pairing already held at 3:1 by PaletteContrastTest,
+                    // which no single colour could manage across pale and crimson nodes alike.
+                    Modifier.border(2.dp, onFill, RoundedCornerShape(7.dp))
                 } else {
                     Modifier
                 },

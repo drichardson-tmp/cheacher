@@ -26,14 +26,20 @@ import androidx.compose.ui.unit.sp
  * Cheacher's visual identity: **lagoon and ember**.
  *
  * The app should feel like clear water over a reef — cool, deep, and lit from above,
- * with one hot spark of coral. The palette is a true complementary scheme:
+ * with one hot spark of flame. The palette is a true complementary scheme:
  *
  * - **60/30: the teal field.** Foam, shallow, and shoal sit on one short arc of
  *   blue-green; they are the dominant field and never compete with content. The board's
  *   two woods are the same arc, pushed apart in value.
- * - **The complement: ember.** Teal's opposite across the wheel is a warm coral-red.
- *   It is the *only* warm hue in the app, which is what makes it read as heat — used
- *   for streaks, unlocks, the selection ring, and nothing else.
+ * - **The complement: ember, an amber.** Teal's opposite across the wheel is warm, and
+ *   ember sits at roughly 32° — burnt amber, not red. That distance is load-bearing:
+ *   the app has a *second* warm family (crimson, ~4°) carrying misses and errors, and an
+ *   accent that rhymes with the error colour reads as a leftover rather than a spark.
+ *   `emberAndCrimsonStayApart` in `PaletteContrastTest` holds the two families apart.
+ * - **Ember marks moments, never state.** Streaks, unlocks, the last move played, and the
+ *   transient square under a lifted piece. Anything that is simply *true for a while* —
+ *   the tree cursor, metadata labels, progress readouts — uses the field's own colours.
+ *   An accent that is always on screen has stopped being an accent.
  * - **The split: sea green and wash blue.** Verdict green sits just off the teal arc so
  *   "correct" never blends into the field, and the review wash leans blue so a reviewed
  *   line is legibly not-new without shouting.
@@ -58,17 +64,19 @@ object Lagoon {
     val abyss = Color(0xFF0D2E30)
     val abyssFaded = Color(0xFF47605F)
 
-    // Ember, the single warm accent and teal's complement. `emberDeep` is the
-    // text-grade cut; `emberBright` is for glows and rings, never for words.
-    val ember = Color(0xFFB2442A)
-    val emberDeep = Color(0xFF8F3320)
-    val emberBright = Color(0xFFE0764F)
+    // Ember: teal's complement, pitched at amber (~32°) so it can never be mistaken for
+    // the crimson that carries misses. `emberDeep` is the text-grade cut; `emberBright`
+    // is for glows and rings, never for words.
+    val ember = Color(0xFFA25E10)
+    val emberDeep = Color(0xFF7A4408)
+    val emberBright = Color(0xFFE59A45)
 
     // Board: the same teal arc, pushed apart in value so pieces read on both squares.
     val boardLight = Color(0xFFCFE6E0)
     val boardDark = Color(0xFF35766F)
 
-    // Verdicts. Sea green sits off the teal arc; madder-coral is ember pushed dark.
+    // Verdicts. Sea green sits off the teal arc; crimson is the app's other warm family,
+    // held near 4° so misses and errors never wear the accent's amber.
     val seaGreen = Color(0xFF1C6B4F)
     val seaGreenFill = Color(0xFF47915F)
     val seaGreenBright = Color(0xFF6FD39A)

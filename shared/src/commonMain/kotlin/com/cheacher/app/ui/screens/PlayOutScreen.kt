@@ -93,7 +93,7 @@ fun PlayOutScreen(
                     Text(
                         "OFF BOOK · CLOSE OUT THE GAME",
                         style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.secondary,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Text(openingTitle, style = MaterialTheme.typography.headlineMedium)
                     AnimatedVisibility(visible = thinking, enter = fadeIn(), exit = fadeOut()) {

@@ -179,6 +179,10 @@ fun ChessBoardView(
                 drawSquareFill(screenOffset(it.from), squarePx, colors.lastMoveGlow)
                 drawSquareFill(screenOffset(it.to), squarePx, colors.lastMoveGlow)
             }
+            // The lifted piece and its drop preview are the board's two ember moments, and
+            // the only place the accent survives on state-ish UI: a teal-family highlight
+            // on teal water measures 1.0-1.4:1 against both squares, i.e. invisible. Warm
+            // is the one hue with anywhere to go here, and both marks vanish on release.
             activeFrom?.let { drawSquareFill(screenOffset(it), squarePx, colors.selectedGlow) }
             // Under-the-finger square: the drop preview, so a drag can be aimed.
             hovered?.let { drawSquareOutline(screenOffset(it), squarePx, colors.selectedGlow) }

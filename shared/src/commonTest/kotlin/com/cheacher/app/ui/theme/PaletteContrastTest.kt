@@ -3,6 +3,8 @@ package com.cheacher.app.ui.theme
 import androidx.compose.material3.ColorScheme
 import androidx.compose.ui.graphics.Color
 import kotlin.math.abs
+import kotlin.math.max
+import kotlin.math.min
 import kotlin.math.pow
 import kotlin.test.Test
 import kotlin.test.assertTrue
@@ -126,6 +128,50 @@ class PaletteContrastTest {
             assertContrast(3.0, app.onVerdict, app.verdictCorrect, "$name onVerdict/verdictCorrect")
             assertContrast(3.0, app.onVerdict, app.verdictMiss, "$name onVerdict/verdictMiss")
         }
+    }
+
+    /**
+     * The accent guard. Ember and crimson are the app's only two warm families and they
+     * mean opposite things — a spark worth chasing versus a move you got wrong. When they
+     * sat 8 degrees apart, every ember ring read as a stray error colour. Holding them a
+     * full step apart on the wheel is what makes ember legible as an accent at all.
+     */
+    @Test
+    fun emberAndCrimsonStayApart() {
+        val ember = listOf("ember" to Lagoon.ember, "emberDeep" to Lagoon.emberDeep, "emberBright" to Lagoon.emberBright)
+        val crimson = listOf("crimson" to Lagoon.crimson, "crimsonFill" to Lagoon.crimsonFill, "crimsonSoft" to Lagoon.crimsonSoft)
+        for ((warmName, warm) in ember) {
+            // Ember must actually be amber, not a red wearing an amber label.
+            val h = hue(warm)
+            assertTrue(h in 22.0..45.0, "$warmName hue ${h.short()} is outside the amber band 22-45")
+            for ((coolName, cool) in crimson) {
+                val gap = hueGap(warm, cool)
+                assertTrue(gap >= 20.0, "$warmName vs $coolName: hue gap ${gap.short()} < 20")
+            }
+        }
+    }
+
+    /** HSL hue in degrees. */
+    private fun hue(color: Color): Double {
+        val r = color.red
+        val g = color.green
+        val b = color.blue
+        val hi = max(r, max(g, b))
+        val lo = min(r, min(g, b))
+        val d = hi - lo
+        if (d == 0f) return 0.0
+        val h = when (hi) {
+            r -> ((g - b) / d + if (g < b) 6f else 0f)
+            g -> ((b - r) / d + 2f)
+            else -> ((r - g) / d + 4f)
+        } * 60f
+        return h.toDouble()
+    }
+
+    /** Shortest distance between two hues on the 360-degree wheel. */
+    private fun hueGap(a: Color, b: Color): Double {
+        val raw = abs(hue(a) - hue(b))
+        return min(raw, 360.0 - raw)
     }
 
     /**
