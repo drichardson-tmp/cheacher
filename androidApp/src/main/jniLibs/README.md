@@ -18,8 +18,18 @@ curl -sL https://github.com/official-stockfish/Stockfish/archive/refs/tags/sf_11
 cd Stockfish-sf_11/src
 $NDK/toolchains/llvm/prebuilt/darwin-x86_64/bin/aarch64-linux-android26-clang++ \
   -std=c++11 -O3 -flto -DNDEBUG -DIS_64BIT -DUSE_POPCNT -static-libstdc++ \
-  -Wl,--strip-all *.cpp syzygy/tbprobe.cpp -o libstockfish.so
+  -Wl,--strip-all -Wl,-z,max-page-size=16384 \
+  *.cpp syzygy/tbprobe.cpp -o libstockfish.so
 # x86_64 (emulator): same, with x86_64-linux-android26-clang++
+```
+
+`max-page-size=16384` is not optional: Android 15+ devices ship a 16 KB page
+size, and the Play packaging check rejects any `lib/**/*.so` whose LOAD segments
+are aligned to the old 4 KB. Verify a rebuild with
+
+```
+$NDK/toolchains/llvm/prebuilt/*/bin/llvm-readelf -lW libstockfish.so | grep LOAD
+# every LOAD must show Align 0x4000
 ```
 
 Stockfish is GPLv3 — see `STOCKFISH-LICENSE.txt` (its `Copying.txt`), source at
