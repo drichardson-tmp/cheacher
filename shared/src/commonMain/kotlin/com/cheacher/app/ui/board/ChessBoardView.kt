@@ -17,6 +17,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -76,8 +77,9 @@ import kotlin.math.roundToInt
  * other chair. It shrinks just enough to keep its corners inside the frame as it goes,
  * and the glyphs counter-rotate so they are never read upside down. Coordinates belong
  * to whichever chair is nearest: they fade out through the turn and come back relabelled.
- * A position jumping backward winds the board briefly against the turn, then releases a
- * quick revolution; the same rotation bends every returning piece's path toward home.
+ * A position jumping backward winds the board clockwise, shivers with coiled energy,
+ * then releases counter-clockwise; the same rotation bends every returning piece's path
+ * toward home.
  *
  * @param shakeTrigger increment to play the wrong-move shake (a rejected idea should
  *   *feel* rejected, not just be silently ignored).
@@ -85,6 +87,8 @@ import kotlin.math.roundToInt
  *   jump begins. The model may already have dealt the next line, so this must carry the
  *   position after the completing move rather than relying on the currently rendered board.
  *   Failure and manual resets should leave this null.
+ * @param onResetPulse a tactile beat at full wind-up, immediately before the board shivers
+ *   and releases. Kept as a callback so the host's haptics preference remains authoritative.
  * @param onSquareTap when set, the board stops being a chessboard and becomes a grid of
  *   64 buttons: taps report their square and nothing selects, moves, or drags. The square
  *   drill's whole interface.
@@ -104,6 +108,7 @@ fun ChessBoardView(
     enabled: Boolean = true,
     shakeTrigger: Int = 0,
     resetHold: BoardResetHold? = null,
+    onResetPulse: () -> Unit = {},
     showCoordinates: Boolean = true,
     onSquareTap: ((Int) -> Unit)? = null,
     spotlight: Spotlight? = null,
@@ -120,6 +125,7 @@ fun ChessBoardView(
     val resetDegrees = remember { Animatable(0f) }
     val resetScale = remember { Animatable(1f) }
     var resetActive by remember { mutableStateOf(false) }
+    val currentOnResetPulse by rememberUpdatedState(onResetPulse)
     val resetRequested = BoardTurn.isReset(boardPosition, position)
     LaunchedEffect(position, lastMove, orientation, resetHold) {
         if (BoardTurn.isReset(boardPosition, position)) {
@@ -135,22 +141,29 @@ fun ChessBoardView(
             resetDegrees.snapTo(0f)
             resetScale.snapTo(1f)
 
-            // Compress as the completed slab winds backward. Once wound, the minimum
+            // Compress as the completed slab winds clockwise. Once wound, the minimum
             // inscribed scale lets it revolve without its corners knocking the frame.
             coroutineScope {
-                launch { resetDegrees.animateTo(-12f, Motion.boardResetRev) }
-                launch { resetScale.animateTo(BoardTurn.minimumScale, Motion.boardResetRev) }
+                launch { resetDegrees.animateTo(Motion.boardResetWindDegrees, Motion.boardResetWind) }
+                launch { resetScale.animateTo(BoardTurn.minimumScale, Motion.boardResetWind) }
+            }
+            currentOnResetPulse()
+
+            // A few tiny, fast reversals hold around the wound angle: tension gathering
+            // before release, rather than the board immediately turning into a spinner.
+            for (degrees in Motion.boardResetCoilDegrees) {
+                resetDegrees.animateTo(degrees, Motion.boardResetCoil)
             }
 
-            // Release the new layout with the spin, not before it. Pieces receive their
+            // Release the new layout with the unwind, not before it. Pieces receive their
             // home squares here and ride the board's rotation while their springs settle.
             boardPosition = position
             boardLastMove = lastMove
             boardOrientation = orientation
-            resetDegrees.animateTo(360f, Motion.boardResetSpin)
+            resetDegrees.animateTo(-360f, Motion.boardResetUnwind)
 
-            // 360° and 0° are the same picture, so the snap is invisible; only the last
-            // little expansion remains, reading as every piece locking into its square.
+            // A full revolution and 0° are the same picture, so the snap is invisible;
+            // only the last little expansion remains, reading as every piece locking in.
             resetDegrees.snapTo(0f)
             resetScale.animateTo(1f, Motion.boardResetLand)
             resetActive = false

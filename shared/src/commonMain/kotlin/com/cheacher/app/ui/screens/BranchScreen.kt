@@ -153,6 +153,7 @@ fun BranchScreen(
                     is BranchEvent.SessionComplete -> event.leaf
                     else -> null
                 }?.let { BoardResetHold(position = it.position, lastMove = it.move) },
+                onResetPulse = { haptic(TrainingHaptic.ResetPulse) },
                 // Recall is unaided: the grid comes off the board once the names are learned.
                 showCoordinates = false,
                 modifier = Modifier.fillMaxWidth(),

@@ -12,11 +12,12 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-/** The three tactile beats shared by every training mode. */
+/** The tactile beats shared by every training mode. */
 enum class TrainingHaptic {
     Correct,
     Wrong,
     LineComplete,
+    ResetPulse,
 }
 
 /**
@@ -61,6 +62,10 @@ private class TrainingHapticPerformer(
                 // Native success feedback has its own rounded, resolved cadence.
                 TrainingHaptic.LineComplete ->
                     haptics.performHapticFeedback(HapticFeedbackType.Confirm)
+
+                // A single firm pulse at maximum wind-up, before the reset releases.
+                TrainingHaptic.ResetPulse ->
+                    haptics.performHapticFeedback(HapticFeedbackType.VirtualKey)
             }
         }
     }

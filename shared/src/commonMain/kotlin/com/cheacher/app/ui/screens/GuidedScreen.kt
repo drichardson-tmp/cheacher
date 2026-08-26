@@ -209,6 +209,7 @@ fun GuidedScreen(
                     ?.line
                     ?.lastOrNull()
                     ?.let { BoardResetHold(position = it.position, lastMove = it.move) },
+                onResetPulse = { haptic(TrainingHaptic.ResetPulse) },
                 modifier = Modifier.fillMaxWidth(),
             )
 

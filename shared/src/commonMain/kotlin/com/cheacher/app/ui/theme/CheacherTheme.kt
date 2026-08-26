@@ -319,17 +319,22 @@ object Motion {
     /** The board turning to the other chair — slow enough to read as one rotation. */
     val tableTurn = spring<Float>(dampingRatio = 0.85f, stiffness = Spring.StiffnessLow)
 
-    /** The tiny move against the grain that winds up a board reset. */
-    val boardResetRev = tween<Float>(durationMillis = 70, easing = FastOutLinearInEasing)
+    /** A readable clockwise push before a reset releases the other way. */
+    const val boardResetWindDegrees = 20f
+    val boardResetWind = tween<Float>(durationMillis = 105, easing = FastOutLinearInEasing)
 
-    /** One quick release of the wound-up board, carrying every piece along its arc. */
-    val boardResetSpin = tween<Float>(durationMillis = 390, easing = FastOutSlowInEasing)
+    /** Tight reversals around the wound angle — quick enough to read as stored energy. */
+    val boardResetCoilDegrees = listOf(14f, 23f, 17f, boardResetWindDegrees)
+    val boardResetCoil = tween<Float>(durationMillis = 32, easing = FastOutSlowInEasing)
+
+    /** One counter-clockwise unwind, carrying every piece home along its arc. */
+    val boardResetUnwind = tween<Float>(durationMillis = 420, easing = FastOutSlowInEasing)
 
     /** The board growing back into the frame after the spinning mass has settled. */
     val boardResetLand = tween<Float>(durationMillis = 90, easing = FastOutSlowInEasing)
 
     /** Any chair change during a reset must land before the reset itself does. */
-    val boardResetTurn = tween<Float>(durationMillis = 460, easing = FastOutSlowInEasing)
+    val boardResetTurn = tween<Float>(durationMillis = 500, easing = FastOutSlowInEasing)
 
     /** Cards, chips, reveals. */
     fun <T> settle() = spring<T>(dampingRatio = 0.8f, stiffness = Spring.StiffnessMedium)
