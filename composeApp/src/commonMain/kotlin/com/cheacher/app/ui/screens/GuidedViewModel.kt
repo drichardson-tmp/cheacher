@@ -9,6 +9,7 @@ import com.cheacher.app.training.GuidedEvent
 import com.cheacher.app.training.GuidedState
 import com.cheacher.app.training.Progression
 import com.cheacher.app.training.ProgressionAdvance
+import com.cheacher.app.training.StudyKind
 import com.cheacher.app.training.advanceFrom
 import com.cheacher.app.training.lapseLinesThrough
 import com.cheacher.app.training.restartLine
@@ -40,8 +41,10 @@ typealias Journal = (transform: (TrainingRecord) -> TrainingRecord) -> Unit
  * construction — a new navigation is a new model — and leaves nothing watching flows
  * after the screen is gone. Only [Journal] writes outlive the visit, by design.
  *
- * [lineIndices] is the progression gate, decided at navigation time: null walks the
- * whole book, otherwise the session is exactly those lines (in practice, the syllabus).
+ * [lineIndices] is the study-plan gate, decided at navigation time: null walks the
+ * whole book, otherwise the session is exactly those lines (in practice, the deal).
+ * [kind] decides the rules: LEARN sessions run the mastery loop and end only when every
+ * dealt line has a clean unaided walk; REVIEW sessions are one pass, score as scored.
  *
  * [wrongShakes] is a monotonic counter (not derived from state) because two identical
  * wrong attempts produce equal events — the UI needs a value that always changes to
@@ -51,10 +54,12 @@ class GuidedViewModel(
     private val tree: OpeningTree,
     progress: ProgressStore,
     lineIndices: List<Int>?,
+    val kind: StudyKind,
     private val scope: CoroutineScope,
     private val journal: Journal,
 ) {
-    private val _state = MutableStateFlow(GuidedState.start(tree, lineIndices))
+    private val _state =
+        MutableStateFlow(GuidedState.start(tree, lineIndices, masteryLoop = kind == StudyKind.LEARN))
     val state: StateFlow<GuidedState> = _state.asStateFlow()
 
     private val _wrongShakes = MutableStateFlow(0)
@@ -81,12 +86,23 @@ class GuidedViewModel(
                 // review streak is about the move being safe, not about which mode asked.
                 journal { it.recordMiss(event.expected.id).lapseLinesThrough(tree, event.expected.id) }
             }
-            is GuidedEvent.LineComplete -> journal { it.recordLineCompleted(event.line.last().id) }
+            is GuidedEvent.LineComplete -> journal {
+                it.recordLineCompleted(event.line.last().id)
+                    .recordLineCredit(event.line.last().id, event.credit)
+            }
             GuidedEvent.SessionComplete -> if (!current.finished) {
-                val lastLine = current.currentLine
+                val lastLeaf = current.currentLine.lastOrNull()
+                // The final line's credit, banked by the same submit that ended the session.
+                val credit = current.passLines.getOrNull(current.lineIndex)?.let { next.lineCredits[it] }
+                val leafIds = tree.lines.map { it.last().id }
+                val at = currentEpochMillis()
                 journal { r ->
-                    (lastLine.lastOrNull()?.let { r.recordLineCompleted(it.id) } ?: r)
-                        .recordGuidedSessionCompleted()
+                    val walked = lastLeaf?.let {
+                        r.recordLineCompleted(it.id).recordLineCredit(it.id, credit ?: 1.0)
+                    } ?: r
+                    // The opening's review clock rolls on the credits just written: a fully
+                    // accounted book starts (or grows) its streak, a slipped review resets it.
+                    walked.recordGuidedSessionCompleted().recordOpeningOutcome(leafIds, at)
                 }
             }
             else -> Unit
@@ -98,7 +114,7 @@ class GuidedViewModel(
     fun restartLine() = _state.update { it.restartLine() }
 
     fun restartSession() {
-        _state.update { GuidedState.start(it.tree, it.lineIndices) }
+        _state.update { GuidedState.start(it.tree, it.lineIndices, it.masteryLoop) }
         journal { it.recordSessionStart(currentEpochMillis()) }
     }
 

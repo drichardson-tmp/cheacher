@@ -52,7 +52,10 @@ fun BranchScreen(
     val shakes by viewModel.wrongShakes.collectAsStateWithLifecycle()
     val flashes by viewModel.closeFlashes.collectAsStateWithLifecycle()
     val unlock by viewModel.unlock.collectAsStateWithLifecycle()
-    val perspective = state.tree.repertoire.perspective
+
+    // One-sided practice keeps the learner's chair fixed; both-sides recall turns the
+    // board over with the move, exactly as the guided walkthrough does.
+    val perspective = state.autoReplyFor?.opposite ?: state.position.sideToMove
 
     // Green wash when a branch closes out.
     val flash = remember { Animatable(0f) }
@@ -104,7 +107,7 @@ fun BranchScreen(
                 } else {
                     "${state.progress.totalLines - failed} recalled, $failed lost. Run it back."
                 },
-                onAgain = viewModel::restartSession,
+                onPrimary = viewModel::restartSession,
                 onBack = onBack,
             )
         }
