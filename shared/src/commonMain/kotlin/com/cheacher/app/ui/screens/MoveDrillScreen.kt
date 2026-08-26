@@ -32,6 +32,8 @@ import com.cheacher.app.training.MoveDrillEvent
 import com.cheacher.app.training.MoveDrillMode
 import com.cheacher.app.training.MoveDrillState
 import com.cheacher.app.ui.board.ChessBoardView
+import com.cheacher.app.ui.feedback.TrainingHaptic
+import com.cheacher.app.ui.feedback.rememberTrainingHaptics
 
 /**
  * The atomic vocabulary drill in both directions: name → move and move → name.
@@ -42,12 +44,40 @@ fun MoveDrillScreen(
     viewModel: MoveDrillViewModel,
     bankSize: Int,
     distinctNames: Int,
+    hapticsEnabled: Boolean = true,
     onBack: () -> Unit,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val query by viewModel.query.collectAsStateWithLifecycle()
     val suggestions by viewModel.suggestions.collectAsStateWithLifecycle()
     val attempts by viewModel.attempts.collectAsStateWithLifecycle()
+    val haptic = rememberTrainingHaptics(hapticsEnabled)
+
+    fun feedbackForLatestAttempt() {
+        haptic(
+            when (viewModel.state.value.lastEvent) {
+                is MoveDrillEvent.Correct -> if (viewModel.state.value.finished) {
+                    TrainingHaptic.LineComplete
+                } else {
+                    TrainingHaptic.Correct
+                }
+                is MoveDrillEvent.WrongMove, is MoveDrillEvent.WrongName -> TrainingHaptic.Wrong
+                null -> return
+            },
+        )
+    }
+
+    fun submitName(name: String) {
+        val before = viewModel.attempts.value
+        viewModel.submitName(name)
+        if (viewModel.attempts.value != before) feedbackForLatestAttempt()
+    }
+
+    fun submitClosest() {
+        val before = viewModel.attempts.value
+        viewModel.submitClosest()
+        if (viewModel.attempts.value != before) feedbackForLatestAttempt()
+    }
 
     Column(
         modifier = Modifier
@@ -123,7 +153,11 @@ fun MoveDrillScreen(
                     position = if (state.mode == MoveDrillMode.FIND_MOVE) card.positionBefore else card.positionAfter,
                     lastMove = if (state.mode == MoveDrillMode.NAME_IT) card.move else null,
                     orientation = card.orientation,
-                    onMove = viewModel::onMove,
+                    onMove = { move ->
+                        val before = viewModel.attempts.value
+                        viewModel.onMove(move)
+                        if (viewModel.attempts.value != before) feedbackForLatestAttempt()
+                    },
                     enabled = state.mode == MoveDrillMode.FIND_MOVE,
                     shakeTrigger = attempts.takeIf {
                         state.lastEvent is MoveDrillEvent.WrongMove || state.lastEvent is MoveDrillEvent.WrongName
@@ -141,8 +175,8 @@ fun MoveDrillScreen(
                     distinctNames = distinctNames,
                     wrong = state.lastEvent is MoveDrillEvent.WrongName,
                     onQueryChange = viewModel::onQueryChange,
-                    onSuggestion = viewModel::submitName,
-                    onCheck = viewModel::submitClosest,
+                    onSuggestion = ::submitName,
+                    onCheck = ::submitClosest,
                 )
             }
         }

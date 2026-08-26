@@ -53,9 +53,11 @@ fun HomeScreen(
     policy: MistakePolicy,
     oneSided: Boolean,
     fullTree: Boolean,
+    hapticsEnabled: Boolean,
     onPolicyChange: (MistakePolicy) -> Unit,
     onOneSidedChange: (Boolean) -> Unit,
     onFullTreeChange: (Boolean) -> Unit,
+    onHapticsEnabledChange: (Boolean) -> Unit,
     onOpenGuided: (OpeningTree) -> Unit,
     onOpenBranch: (OpeningTree) -> Unit,
     onOpenSquareDrill: () -> Unit = {},
@@ -134,6 +136,18 @@ fun HomeScreen(
                         )
                     }
                     Switch(checked = oneSided, onCheckedChange = onOneSidedChange)
+                }
+                Text("FEEDBACK", style = MaterialTheme.typography.labelSmall)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Vibration feedback", style = MaterialTheme.typography.bodyMedium)
+                        Text(
+                            "Subtle cues for moves and completed lines",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Switch(checked = hapticsEnabled, onCheckedChange = onHapticsEnabledChange)
                 }
             }
         }

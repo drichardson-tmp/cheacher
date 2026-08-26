@@ -37,6 +37,8 @@ import com.cheacher.app.training.DrillEvent
 import com.cheacher.app.training.DrillSummary
 import com.cheacher.app.ui.board.ChessBoardView
 import com.cheacher.app.ui.board.Spotlight
+import com.cheacher.app.ui.feedback.TrainingHaptic
+import com.cheacher.app.ui.feedback.rememberTrainingHaptics
 import kotlinx.coroutines.delay
 
 /** An empty board: the drill is about the grid, and pieces would only be scenery. */
@@ -53,10 +55,12 @@ private val emptyBoard = Fen.parse("8/8/8/8/8/8/8/8 w - - 0 1")
 @Composable
 fun SquareDrillScreen(
     viewModel: SquareDrillViewModel,
+    hapticsEnabled: Boolean = true,
     onBack: () -> Unit,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val taps by viewModel.taps.collectAsStateWithLifecycle()
+    val haptic = rememberTrainingHaptics(hapticsEnabled)
 
     // The verdict wash, cleared on a timer so a stale green never sits under a new prompt.
     var spotlight by remember { mutableStateOf<Spotlight?>(null) }
@@ -128,7 +132,20 @@ fun SquareDrillScreen(
             enabled = !state.finished,
             // The grid has to live in your head, so it does not live on the board.
             showCoordinates = false,
-            onSquareTap = viewModel::onSquareTap,
+            onSquareTap = { square ->
+                viewModel.onSquareTap(square)
+                haptic(
+                    when (viewModel.state.value.lastEvent) {
+                        is DrillEvent.Found -> if (viewModel.state.value.finished) {
+                            TrainingHaptic.LineComplete
+                        } else {
+                            TrainingHaptic.Correct
+                        }
+                        is DrillEvent.Missed -> TrainingHaptic.Wrong
+                        null -> return@ChessBoardView
+                    },
+                )
+            },
             spotlight = spotlight,
             modifier = Modifier.fillMaxWidth(),
         )

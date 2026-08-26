@@ -27,6 +27,7 @@ import com.cheacher.app.domain.OpeningTree
 import com.cheacher.app.engine.SparringElo
 import com.cheacher.app.progress.ProgressStore
 import com.cheacher.app.progress.ProgressStoreProvider
+import com.cheacher.app.progress.AppSettings
 import com.cheacher.app.progress.StoreHealth
 import com.cheacher.app.progress.TrainingRecord
 import com.cheacher.app.progress.currentEpochMillis
@@ -140,6 +141,12 @@ class RootViewModel(val progress: ProgressStore) : ViewModel() {
     val storeHealth: StateFlow<StoreHealth> =
         progress.health.stateIn(viewModelScope, SharingStarted.Eagerly, StoreHealth())
 
+    /** App-wide preferences, emitted by the same durable store as training history. */
+    val settings: StateFlow<AppSettings?> =
+        progress.settings
+            .map<AppSettings, AppSettings?> { it }
+            .stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
     private val _screen = MutableStateFlow<Screen>(Screen.Dealing)
     val screen: StateFlow<Screen> = _screen.asStateFlow()
 
@@ -182,6 +189,12 @@ class RootViewModel(val progress: ProgressStore) : ViewModel() {
 
     fun setFullTree(fullTree: Boolean) {
         _fullTree.value = fullTree
+    }
+
+    fun setHapticsEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            progress.updateSettings { it.copy(hapticsEnabled = enabled) }
+        }
     }
 
     /** A [Journal] for one repertoire, writing on this app-scoped ViewModel's lifetime. */
@@ -282,6 +295,10 @@ fun App() {
         val fullTree by root.fullTree.collectAsStateWithLifecycle()
         val records by root.records.collectAsStateWithLifecycle()
         val health by root.storeHealth.collectAsStateWithLifecycle()
+        val settings by root.settings.collectAsStateWithLifecycle()
+        // A persisted opt-out must win even during the store's first read. Feedback is
+        // therefore quiet until settings arrive; a fresh install emits the default on.
+        val hapticsEnabled = settings?.hapticsEnabled == true
 
         AnimatedContent(
             targetState = screen,
@@ -312,9 +329,11 @@ fun App() {
                     policy = policy,
                     oneSided = oneSided,
                     fullTree = fullTree,
+                    hapticsEnabled = hapticsEnabled,
                     onPolicyChange = root::setPolicy,
                     onOneSidedChange = root::setOneSided,
                     onFullTreeChange = root::setFullTree,
+                    onHapticsEnabledChange = root::setHapticsEnabled,
                     onOpenGuided = root::openGuided,
                     onOpenBranch = root::openBranch,
                     onOpenSquareDrill = root::openSquareDrill,
@@ -327,7 +346,11 @@ fun App() {
                     val vm = remember(current) {
                         SquareDrillViewModel(journal = root.journalForId(TrainingRecord.DRILL_RECORD_ID))
                     }
-                    SquareDrillScreen(viewModel = vm, onBack = root::home)
+                    SquareDrillScreen(
+                        viewModel = vm,
+                        hapticsEnabled = hapticsEnabled,
+                        onBack = root::home,
+                    )
                 }
 
                 is Screen.MoveDrill -> {
@@ -342,6 +365,7 @@ fun App() {
                         viewModel = vm,
                         bankSize = bank.size,
                         distinctNames = bank.map { it.name }.distinct().size,
+                        hapticsEnabled = hapticsEnabled,
                         onBack = root::home,
                     )
                 }
@@ -363,6 +387,7 @@ fun App() {
                     }
                     GuidedScreen(
                         viewModel = vm,
+                        hapticsEnabled = hapticsEnabled,
                         onContinue = root::deal,
                         onBack = root::home,
                         sparringElo = records?.get(current.repertoireId)?.sparring?.rating
@@ -386,7 +411,11 @@ fun App() {
                             journal = root.journalFor(tree),
                         )
                     }
-                    BranchScreen(viewModel = vm, onBack = root::home)
+                    BranchScreen(
+                        viewModel = vm,
+                        hapticsEnabled = hapticsEnabled,
+                        onBack = root::home,
+                    )
                 }
 
                 is Screen.PlayOut -> {
