@@ -24,6 +24,9 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import cheacher.shared.generated.resources.Res
+import cheacher.shared.generated.resources.nunito_sans
+import org.jetbrains.compose.resources.Font
 
 /**
  * Cheacher's visual identity: **lagoon and ember**.
@@ -231,60 +234,71 @@ internal val DarkColors = darkColorScheme(
 )
 
 /**
- * Serif for names (the product's whole premise is that names matter), monospace for
- * moves (SAN is code), default sans for chrome.
+ * Friendly Nunito Sans for names, monospace for moves (SAN is code), and the default
+ * system sans for body copy and chrome.
  */
-private val CheacherTypography = Typography(
-    displaySmall = TextStyle(
-        fontFamily = FontFamily.Serif,
-        fontWeight = FontWeight.Bold,
-        fontSize = 32.sp,
-        lineHeight = 38.sp,
-        letterSpacing = (-0.5).sp,
-    ),
-    headlineMedium = TextStyle(
-        fontFamily = FontFamily.Serif,
-        fontWeight = FontWeight.Bold,
-        fontSize = 26.sp,
-        lineHeight = 32.sp,
-    ),
-    headlineSmall = TextStyle(
-        fontFamily = FontFamily.Serif,
-        fontWeight = FontWeight.SemiBold,
-        fontSize = 22.sp,
-        lineHeight = 28.sp,
-    ),
-    titleMedium = TextStyle(
-        fontFamily = FontFamily.Serif,
-        fontWeight = FontWeight.SemiBold,
-        fontSize = 17.sp,
-        lineHeight = 22.sp,
-    ),
-    bodyLarge = TextStyle(
-        fontSize = 16.sp,
-        lineHeight = 23.sp,
-    ),
-    bodyMedium = TextStyle(
-        fontSize = 14.sp,
-        lineHeight = 20.sp,
-    ),
-    labelLarge = TextStyle(
-        fontWeight = FontWeight.SemiBold,
-        fontSize = 14.sp,
-        letterSpacing = 0.4.sp,
-    ),
-    labelMedium = TextStyle(
-        fontFamily = FontFamily.Monospace,
-        fontWeight = FontWeight.Medium,
-        fontSize = 13.sp,
-        letterSpacing = 0.2.sp,
-    ),
-    labelSmall = TextStyle(
-        fontWeight = FontWeight.Medium,
-        fontSize = 11.sp,
-        letterSpacing = 0.8.sp,
-    ),
-)
+@Composable
+private fun cheacherTypography(): Typography {
+    // One variable-font asset supplies every display weight, so headings stay consistent
+    // across Android and iOS without bundling three near-identical font files.
+    val nunitoSans = FontFamily(
+        Font(Res.font.nunito_sans, weight = FontWeight.SemiBold),
+        Font(Res.font.nunito_sans, weight = FontWeight.Bold),
+        Font(Res.font.nunito_sans, weight = FontWeight.ExtraBold),
+    )
+
+    return Typography(
+        displaySmall = TextStyle(
+            fontFamily = nunitoSans,
+            fontWeight = FontWeight.ExtraBold,
+            fontSize = 32.sp,
+            lineHeight = 38.sp,
+            letterSpacing = (-0.5).sp,
+        ),
+        headlineMedium = TextStyle(
+            fontFamily = nunitoSans,
+            fontWeight = FontWeight.Bold,
+            fontSize = 26.sp,
+            lineHeight = 32.sp,
+        ),
+        headlineSmall = TextStyle(
+            fontFamily = nunitoSans,
+            fontWeight = FontWeight.SemiBold,
+            fontSize = 22.sp,
+            lineHeight = 28.sp,
+        ),
+        titleMedium = TextStyle(
+            fontFamily = nunitoSans,
+            fontWeight = FontWeight.SemiBold,
+            fontSize = 17.sp,
+            lineHeight = 22.sp,
+        ),
+        bodyLarge = TextStyle(
+            fontSize = 16.sp,
+            lineHeight = 23.sp,
+        ),
+        bodyMedium = TextStyle(
+            fontSize = 14.sp,
+            lineHeight = 20.sp,
+        ),
+        labelLarge = TextStyle(
+            fontWeight = FontWeight.SemiBold,
+            fontSize = 14.sp,
+            letterSpacing = 0.4.sp,
+        ),
+        labelMedium = TextStyle(
+            fontFamily = FontFamily.Monospace,
+            fontWeight = FontWeight.Medium,
+            fontSize = 13.sp,
+            letterSpacing = 0.2.sp,
+        ),
+        labelSmall = TextStyle(
+            fontWeight = FontWeight.Medium,
+            fontSize = 11.sp,
+            letterSpacing = 0.8.sp,
+        ),
+    )
+}
 
 private val CheacherShapes = Shapes(
     extraSmall = RoundedCornerShape(6.dp),
@@ -347,7 +361,7 @@ fun CheacherTheme(
     ) {
         MaterialTheme(
             colorScheme = if (darkTheme) DarkColors else LightColors,
-            typography = CheacherTypography,
+            typography = cheacherTypography(),
             shapes = CheacherShapes,
             content = content,
         )

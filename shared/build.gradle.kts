@@ -12,6 +12,12 @@ kotlin {
         compileSdk = libs.versions.androidCompileSdk.get().toInt()
         minSdk = libs.versions.androidMinSdk.get().toInt()
 
+        // AGP's KMP library target keeps resource processing opt-in. Compose's generated
+        // font assets need it enabled so the Android app can package them.
+        androidResources {
+            enable = true
+        }
+
         // The 109-test commonTest suite is pure Kotlin, so it runs on the host JVM.
         withHostTestBuilder {}.configure {
             isIncludeAndroidResources = true
@@ -44,6 +50,7 @@ kotlin {
             api(compose.foundation)
             api(compose.material3)
             api(compose.ui)
+            implementation(compose.components.resources)
             implementation(libs.kotlinx.coroutines.core)
             implementation(libs.kotlinx.serialization.json)
             implementation(libs.androidx.datastore.preferences.core)
