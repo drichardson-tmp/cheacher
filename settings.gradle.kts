@@ -27,4 +27,7 @@ dependencyResolutionManagement {
     }
 }
 
-include(":composeApp")
+enableFeaturePreview("TYPESAFE_PROJECT_ACCESSORS")
+
+include(":shared")
+include(":androidApp")
