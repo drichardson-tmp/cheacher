@@ -74,6 +74,14 @@ import kotlin.math.sin
  *
  * @param shakeTrigger increment to play the wrong-move shake (a rejected idea should
  *   *feel* rejected, not just be silently ignored).
+ * @param onSquareTap when set, the board stops being a chessboard and becomes a grid of
+ *   64 buttons: taps report their square and nothing selects, moves, or drags. The square
+ *   drill's whole interface.
+ * @param spotlight a square to wash green (found) or red (wrong) — the drill's feedback,
+ *   which has no [Move] to highlight the way a session does.
+ * @param showCoordinates a–h/1–8 on the board edges. On while the names are being
+ *   learned, off in recall and in the square drill, where finding the square *is* the
+ *   skill being measured.
  */
 @Composable
 fun ChessBoardView(
@@ -84,6 +92,9 @@ fun ChessBoardView(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
     shakeTrigger: Int = 0,
+    showCoordinates: Boolean = true,
+    onSquareTap: ((Int) -> Unit)? = null,
+    spotlight: Spotlight? = null,
     pieceRenderer: PieceRenderer = GlyphPieceRenderer,
 ) {
     var selected by remember(position) { mutableStateOf<Int?>(null) }
@@ -174,10 +185,14 @@ fun ChessBoardView(
 
         Canvas(modifier = Modifier.fillMaxSize()) {
             drawSquares(squarePx, colors)
-            drawCoordinates(coordinateLayouts, squarePx, flipDegrees, colors)
+            if (showCoordinates) drawCoordinates(coordinateLayouts, squarePx, flipDegrees, colors)
             lastMove?.let {
                 drawSquareFill(screenOffset(it.from), squarePx, colors.lastMoveGlow)
                 drawSquareFill(screenOffset(it.to), squarePx, colors.lastMoveGlow)
+            }
+            spotlight?.let {
+                val ink = if (it.correct) colors.verdictCorrect else colors.verdictMiss
+                drawSquareFill(screenOffset(it.square), squarePx, ink.copy(alpha = 0.55f))
             }
             activeFrom?.let { drawSquareFill(screenOffset(it), squarePx, colors.selectedGlow) }
             // Under-the-finger square: the drop preview, so a drag can be aimed.
@@ -258,6 +273,12 @@ fun ChessBoardView(
                     if (!enabled) return@pointerInput
                     detectTapGestures { tap ->
                         val square = squareAt(tap) ?: return@detectTapGestures
+                        // Grid-of-buttons mode: the tap *is* the answer, so none of the
+                        // selection machinery below should run.
+                        if (onSquareTap != null) {
+                            onSquareTap(square)
+                            return@detectTapGestures
+                        }
                         val from = selected
                         // Recomputed from [legalMoves], never read from the captured
                         // `targets`: this gesture block is keyed on [position], so a
@@ -282,7 +303,8 @@ fun ChessBoardView(
                     }
                 }
                 .pointerInput(position, enabled, orientation) {
-                    if (!enabled) return@pointerInput
+                    // Nothing to drag when the board is a grid of buttons.
+                    if (!enabled || onSquareTap != null) return@pointerInput
                     detectDragGestures(
                         onDragStart = { start ->
                             val square = squareAt(start)
@@ -417,6 +439,9 @@ private fun DrawScope.drawCheckGlow(origin: Offset, squarePx: Float, color: Colo
         style = Stroke(width = squarePx * 0.1f),
     )
 }
+
+/** The drill's one-square verdict wash: green for found, red for a wrong tap. */
+data class Spotlight(val square: Int, val correct: Boolean)
 
 /** A piece in hand: where it came from, and where the finger is now (board pixels). */
 private data class DragState(val from: Int, val pointer: Offset)

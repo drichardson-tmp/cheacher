@@ -7,6 +7,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
@@ -26,6 +27,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.cheacher.app.domain.OpeningTree
@@ -42,6 +44,10 @@ import com.cheacher.app.ui.theme.Motion
  * dim toward the paper so the eye lands on what is still live. The cursor gets a brass
  * ring. Colour and alpha both animate, so closing a branch reads as it fading into
  * history rather than a repaint.
+ *
+ * [showNames] widens the chips and puts the canonical name above the move — the
+ * read-only form, for the end of a round. During recall the diagram stays off screen
+ * entirely: it is a picture of the answer.
  */
 @Composable
 fun VariationTreeView(
@@ -49,10 +55,11 @@ fun VariationTreeView(
     statusOf: (TreeNode) -> NodeStatus,
     cursorId: String?,
     modifier: Modifier = Modifier,
+    showNames: Boolean = false,
 ) {
     val layout = remember(tree) { TreeLayout(tree) }
-    val cellW = 54.dp
-    val cellH = 26.dp
+    val cellW = if (showNames) 132.dp else 54.dp
+    val cellH = if (showNames) 40.dp else 26.dp
     val hGap = 14.dp
     val vGap = 8.dp
 
@@ -69,6 +76,7 @@ fun VariationTreeView(
                         node = node,
                         status = statusOf(node),
                         isCursor = node.id == cursorId,
+                        showName = showNames,
                         modifier = Modifier
                             .offsetIn(slot, cellW, cellH, hGap, vGap)
                             .size(cellW, cellH),
@@ -87,6 +95,7 @@ private fun NodeChip(
     node: TreeNode,
     status: NodeStatus,
     isCursor: Boolean,
+    showName: Boolean,
     modifier: Modifier = Modifier,
 ) {
     val colors = CheacherTheme.colors
@@ -134,13 +143,33 @@ private fun NodeChip(
             ),
         contentAlignment = Alignment.Center,
     ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelMedium,
-            color = onFill,
-            textAlign = TextAlign.Center,
-            maxLines = 1,
-        )
+        if (showName) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(
+                    text = node.name,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = onFill,
+                    textAlign = TextAlign.Center,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = onFill,
+                    textAlign = TextAlign.Center,
+                    maxLines = 1,
+                )
+            }
+        } else {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelMedium,
+                color = onFill,
+                textAlign = TextAlign.Center,
+                maxLines = 1,
+            )
+        }
     }
 }
 

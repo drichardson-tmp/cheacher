@@ -28,6 +28,7 @@ import androidx.compose.runtime.remember
 import com.cheacher.app.chess.Color as ChessColor
 import com.cheacher.app.domain.OpeningTree
 import com.cheacher.app.progress.StoreHealth
+import com.cheacher.app.progress.DrillRecord
 import com.cheacher.app.progress.TrainingRecord
 import com.cheacher.app.training.MistakePolicy
 import com.cheacher.app.training.OpeningStanding
@@ -56,6 +57,9 @@ fun HomeScreen(
     onFullTreeChange: (Boolean) -> Unit,
     onOpenGuided: (OpeningTree) -> Unit,
     onOpenBranch: (OpeningTree) -> Unit,
+    onOpenSquareDrill: () -> Unit = {},
+    /** The drill's history, if any has been banked. Null reads as "never drilled". */
+    drill: DrillRecord? = null,
 ) {
     Column(
         modifier = Modifier
@@ -66,7 +70,7 @@ fun HomeScreen(
     ) {
         Text("Cheacher", style = MaterialTheme.typography.displaySmall)
         Text(
-            "Openings, learned by name. Then pruned from memory.",
+            "Openings, learned by name. Then recalled from nothing.",
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -130,6 +134,8 @@ fun HomeScreen(
                 }
             }
         }
+
+        SquareDrillCard(drill = drill, onOpen = onOpenSquareDrill)
 
         for (tree in trees) {
             RepertoireCard(
@@ -238,7 +244,7 @@ private fun RepertoireCard(
                     Text("Learn the names")
                 }
                 OutlinedButton(onClick = onOpenBranch, enabled = sessionsEnabled) {
-                    Text("Prune the tree")
+                    Text("Recall the lines")
                 }
             }
         }
@@ -261,4 +267,44 @@ private fun streakLabel(tree: OpeningTree, record: TrainingRecord?, nowEpochMill
         if (best != null) add("${best.first.name}: ${best.second} clean recalls")
     }
     return parts.takeIf { it.isNotEmpty() }?.joinToString(" · ")
+}
+
+/**
+ * The warm-up, sitting above the shelf rather than on it: the drill trains board geometry,
+ * which belongs to no opening and unlocks nothing. Its line is the median, because that is
+ * the number that moves as the grid becomes automatic.
+ */
+@Composable
+private fun SquareDrillCard(drill: DrillRecord?, onOpen: () -> Unit) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+    ) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text("Square drill", style = MaterialTheme.typography.titleMedium)
+            Text(
+                text = drill?.let { record ->
+                    val median = record.lastMedianMillis
+                    val best = record.bestMedianMillis
+                    buildString {
+                        append("Last ${tenths(median)} a square")
+                        if (best != null && best != median) append(" · best ${tenths(best)}")
+                        append(" · ${record.rounds} rounds")
+                    }
+                } ?: "Find the square, no labels, both sides of the board. Ninety seconds.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(2.dp))
+            Row {
+                OutlinedButton(onClick = onOpen) { Text("Drill squares") }
+            }
+        }
+    }
+}
+
+private fun tenths(millis: Long?): String {
+    if (millis == null) return "—"
+    val t = (millis + 50) / 100
+    return "${t / 10}.${t % 10}s"
 }

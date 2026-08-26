@@ -89,10 +89,13 @@ class BranchSessionTest {
         assertEquals("0", forgiven.cursorId, "a forgiven miss must not move the board")
         assertEquals(0, forgiven.progress.failedLines)
 
-        val failed = forgiven.submit(move("d7d6")) // miss two: branch lost
+        val failed = forgiven.submit(move("d7d6")) // miss two: the named line is lost
         assertIs<BranchEvent.BranchFailed>(failed.lastEvent)
-        assertEquals(NodeStatus.FAILED, failed.statusOf(assertNotNull(tree.node("0"))))
-        assertTrue(failed.finished, "failing the only root move closes the whole tree")
+        // Only the line that was being asked for dies; the Sicilian is still to come.
+        assertEquals(NodeStatus.FAILED, failed.statusOf(assertNotNull(tree.node("0.0.0"))))
+        assertEquals(NodeStatus.UNVISITED, failed.statusOf(assertNotNull(tree.node("0.1"))))
+        assertFalse(failed.finished)
+        assertEquals("0.1.0", failed.targetLeaf?.id, "the next name comes up")
     }
 
     @Test
@@ -217,8 +220,35 @@ class BranchSessionTest {
     fun pathMirrorsTheCursor() {
         val state = BranchState.start(tree)
             .submit(move("e2e4"))
-            .submit(move("c7c5"))
-        assertEquals(listOf("0", "0.1"), state.path.map { it.id })
-        assertEquals("c5", state.path.last().san)
+            .submit(move("e7e5"))
+        assertEquals(listOf("0", "0.0"), state.path.map { it.id })
+        assertEquals("e5", state.path.last().san)
+    }
+
+    @Test
+    fun theTargetIsTheFirstUnclosedLineAndItsNameIsThePrompt() {
+        val start = BranchState.start(tree)
+        assertEquals("0.0.0", start.targetLeaf?.id)
+        assertEquals(setOf("0", "0.0", "0.0.0"), start.targetPathIds)
+
+        // Bank line one and the ask moves on to line two.
+        val next = start.submit(move("e2e4")).submit(move("e7e5")).submit(move("g1f3"))
+        assertEquals("0.1.0", next.targetLeaf?.id)
+    }
+
+    @Test
+    fun aRealMoveOffTheNamedLineIsStillWrong() {
+        // 1...c5 is in the book, but the line on the card is the one through 1...e5.
+        val state = BranchState.start(tree).submit(move("e2e4")).submit(move("c7c5"))
+        assertIs<BranchEvent.BranchFailed>(state.lastEvent)
+        assertEquals(NodeStatus.UNVISITED, state.statusOf(assertNotNull(tree.node("0.1"))))
+    }
+
+    @Test
+    fun theLastLineHasNoTargetOnceItIsClosed() {
+        var state = BranchState.start(tree)
+        for (uci in listOf("e2e4", "e7e5", "g1f3", "c7c5", "g1f3")) state = state.submit(move(uci))
+        assertTrue(state.finished)
+        assertNull(state.targetLeaf)
     }
 }
