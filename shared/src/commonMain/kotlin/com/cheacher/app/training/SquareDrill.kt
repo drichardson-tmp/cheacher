@@ -87,17 +87,25 @@ data class DrillSummary(
 
     companion object {
         fun of(answered: List<DrillRep>): DrillSummary {
-            val times = answered.map { it.millis }.sorted()
+            return ofTimes(
+                times = answered.map { it.millis },
+                cleanReps = answered.count { it.clean },
+            )
+        }
+
+        /** Shared timed-summary math for drills whose answer is not literally a square. */
+        fun ofTimes(times: List<Long>, cleanReps: Int): DrillSummary {
+            val sortedTimes = times.sorted()
             val median = when {
-                times.isEmpty() -> null
-                times.size % 2 == 1 -> times[times.size / 2]
-                else -> (times[times.size / 2 - 1] + times[times.size / 2]) / 2
+                sortedTimes.isEmpty() -> null
+                sortedTimes.size % 2 == 1 -> sortedTimes[sortedTimes.size / 2]
+                else -> (sortedTimes[sortedTimes.size / 2 - 1] + sortedTimes[sortedTimes.size / 2]) / 2
             }
             return DrillSummary(
-                reps = answered.size,
-                cleanReps = answered.count { it.clean },
+                reps = sortedTimes.size,
+                cleanReps = cleanReps.coerceIn(0, sortedTimes.size),
                 medianMillis = median,
-                bestMillis = times.firstOrNull(),
+                bestMillis = sortedTimes.firstOrNull(),
             )
         }
     }

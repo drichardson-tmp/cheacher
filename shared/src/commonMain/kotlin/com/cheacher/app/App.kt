@@ -34,6 +34,7 @@ import com.cheacher.app.training.MistakePolicy
 import com.cheacher.app.training.OpeningStanding
 import com.cheacher.app.training.Progression
 import com.cheacher.app.training.StudyKind
+import com.cheacher.app.training.moveDrillBank
 import com.cheacher.app.training.studyPlan
 import com.cheacher.app.training.syllabusAt
 import com.cheacher.app.ui.screens.BranchScreen
@@ -41,6 +42,8 @@ import com.cheacher.app.ui.screens.BranchViewModel
 import com.cheacher.app.ui.screens.GuidedScreen
 import com.cheacher.app.ui.screens.GuidedViewModel
 import com.cheacher.app.ui.screens.HomeScreen
+import com.cheacher.app.ui.screens.MoveDrillScreen
+import com.cheacher.app.ui.screens.MoveDrillViewModel
 import com.cheacher.app.ui.screens.SquareDrillScreen
 import com.cheacher.app.ui.screens.SquareDrillViewModel
 import com.cheacher.app.ui.screens.Journal
@@ -84,6 +87,9 @@ sealed interface Screen {
 
     /** The square drill: no repertoire, no gate, no snapshot — it belongs to no opening. */
     data object SquareDrill : Screen
+
+    /** Shelf-wide opening vocabulary in both directions, independent of progression. */
+    data object MoveDrill : Screen
 
     data class Branch(
         val repertoireId: String,
@@ -257,6 +263,10 @@ class RootViewModel(val progress: ProgressStore) : ViewModel() {
         _screen.value = Screen.SquareDrill
     }
 
+    fun openMoveDrill() {
+        _screen.value = Screen.MoveDrill
+    }
+
     fun home() {
         _screen.value = Screen.Home
     }
@@ -308,7 +318,9 @@ fun App() {
                     onOpenGuided = root::openGuided,
                     onOpenBranch = root::openBranch,
                     onOpenSquareDrill = root::openSquareDrill,
+                    onOpenMoveDrill = root::openMoveDrill,
                     drill = records?.get(TrainingRecord.DRILL_RECORD_ID)?.squareDrill,
+                    moveDrill = records?.get(TrainingRecord.DRILL_RECORD_ID)?.moveDrill,
                 )
 
                 is Screen.SquareDrill -> {
@@ -316,6 +328,22 @@ fun App() {
                         SquareDrillViewModel(journal = root.journalForId(TrainingRecord.DRILL_RECORD_ID))
                     }
                     SquareDrillScreen(viewModel = vm, onBack = root::home)
+                }
+
+                is Screen.MoveDrill -> {
+                    val bank = remember(root.trees) { moveDrillBank(root.trees) }
+                    val vm = remember(current) {
+                        MoveDrillViewModel(
+                            bank = bank,
+                            journal = root.journalForId(TrainingRecord.DRILL_RECORD_ID),
+                        )
+                    }
+                    MoveDrillScreen(
+                        viewModel = vm,
+                        bankSize = bank.size,
+                        distinctNames = bank.map { it.name }.distinct().size,
+                        onBack = root::home,
+                    )
                 }
 
                 is Screen.Guided -> {

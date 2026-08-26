@@ -122,6 +122,9 @@ data class TrainingRecord(
      */
     @SerialName("square_drill")
     val squareDrill: DrillRecord? = null,
+    /** Shelf-wide opening-vocabulary timings, split by recall direction. */
+    @SerialName("move_drill")
+    val moveDrill: MoveDrillRecord? = null,
 ) {
     val totalMisses: Int get() = missCounts.values.sum()
 
