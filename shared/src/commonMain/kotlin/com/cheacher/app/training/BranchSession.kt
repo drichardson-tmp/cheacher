@@ -59,6 +59,13 @@ data class BranchState(
      * the "practise it from the other side" mode. Null means the learner plays both sides.
      */
     val autoReplyFor: Color? = null,
+    /**
+     * The shared trunk's last node, once the book's road in has been earned — see
+     * [OpeningEntry]. The round opens there and snaps back no further than there, so the
+     * ten Italian lines are pruned from the Italian rather than from move one. Null is
+     * the ordinary case: the round starts and re-forms at the true starting position.
+     */
+    val entryNodeId: String? = null,
     val strikes: Int = 0,
     val lastEvent: BranchEvent? = null,
     val finished: Boolean = false,
@@ -109,12 +116,18 @@ data class BranchState(
          * [allowedNodeIds] is the progression gate: nodes outside it start the round
          * [NodeStatus.LOCKED] — unplayable, unpenalised, and outside the score. Null
          * means the whole tree, which keeps full-tree practice exactly as it was.
+         *
+         * [entryNodeId] is the earned trunk end ([OpeningEntry.entryNode]): the round
+         * opens with that road already walked. Ignored unless the node is real, on the
+         * trunk, and unlocked — a gate the learner has not reached must never be
+         * skipped past by an entry drawn from a different snapshot.
          */
         fun start(
             tree: OpeningTree,
             policy: MistakePolicy = MistakePolicy.STRICT,
             autoReplyFor: Color? = null,
             allowedNodeIds: Set<String>? = null,
+            entryNodeId: String? = null,
         ): BranchState {
             val locked = if (allowedNodeIds == null) {
                 emptyMap()
@@ -122,11 +135,24 @@ data class BranchState(
                 tree.allNodes.filter { it.id !in allowedNodeIds }
                     .associate { it.id to NodeStatus.LOCKED }
             }
+            val trunk = tree.trunk()
+            val trunkIds = trunk.map { it.id }
+            val entry = entryNodeId
+                ?.takeIf { it in trunkIds && trunkIds.none { id -> locked.containsKey(id) } }
+            // Everything down to the entry reads as travelled, so the diagram and the move
+            // strip show the road in as history rather than as something still to find.
+            val walkedIn = if (entry == null) {
+                emptyMap()
+            } else {
+                trunk.take(trunkIds.indexOf(entry) + 1).associate { it.id to NodeStatus.IN_PROGRESS }
+            }
             return BranchState(
                 tree = tree,
-                statuses = locked,
+                cursorId = entry,
+                statuses = locked + walkedIn,
                 policy = policy,
                 autoReplyFor = autoReplyFor,
+                entryNodeId = entry,
                 finished = tree.rootChildren.all { locked[it.id]?.isClosed == true },
             ).autoReply()
         }
@@ -287,15 +313,20 @@ private fun BranchState.close(node: TreeNode, status: NodeStatus): BranchState {
 
 /**
  * Walks up from [from] to the first ancestor that still has an unclosed child.
- * Null means "back to the starting position".
+ * Null means "back to the starting position" — or, once the road in has been earned,
+ * back to the entry node, which is as far out of the opening as a round ever reels.
  */
 private fun BranchState.nearestOpenJunction(from: TreeNode, statuses: Map<String, NodeStatus>): TreeNode? {
+    // Standing on the entry already: there is nowhere further out to go, so "back to the
+    // junction" from inside the Italian never drops you outside the Italian.
+    if (from.id == entryNodeId) return from
     var candidate = from.parentId?.let(tree::node)
     while (candidate != null) {
+        if (candidate.id == entryNodeId) return candidate
         if (candidate.children.any { statuses[it.id]?.isClosed != true }) return candidate
         candidate = candidate.parentId?.let(tree::node)
     }
-    return null
+    return entryNodeId?.let(tree::node)
 }
 
 /** Abandons the current line without penalty and returns to the nearest open junction. */

@@ -35,6 +35,12 @@ data class GuidedState(
     val masteryLoop: Boolean = false,
     /** The current pass's absolute line indices. The first pass is the whole [deal]. */
     val passLines: List<Int> = emptyList(),
+    /**
+     * Plies of the shared trunk already behind the learner when a line opens — see
+     * [OpeningEntry]. Zero walks every line from the true starting position, which is
+     * how a book behaves until its road in has been earned.
+     */
+    val entryPly: Int = 0,
     val lineIndex: Int = 0,
     val plyIndex: Int = 0,
     /** True once the human-language hint has been unlocked for the current move. */
@@ -96,23 +102,35 @@ data class GuidedState(
         get() = GuidedProgress(
             lineNumber = (lineIndex + 1).coerceAtMost(lines.size),
             lineCount = lines.size,
-            plyNumber = plyIndex,
-            plyCount = currentLine.size,
+            // Measured from the entry, not from move one: the trunk is context on the
+            // move strip, and a bar that opens at 40% claims work that was not done here.
+            plyNumber = (plyIndex - entryPly).coerceAtLeast(0),
+            plyCount = (currentLine.size - entryPly).coerceAtLeast(0),
         )
 
     companion object {
-        /** [lineIndices] restricts the session to those lines; null walks the whole book. */
+        /**
+         * [lineIndices] restricts the session to those lines; null walks the whole book.
+         * [entryPly] skips that many shared opening plies on every line — clamped so the
+         * shortest dealt line still has a move left to play, since a caller's earned entry
+         * is a suggestion and the deal is the authority on what is walkable.
+         */
         fun start(
             tree: OpeningTree,
             lineIndices: List<Int>? = null,
             masteryLoop: Boolean = false,
+            entryPly: Int = 0,
         ): GuidedState {
             val deal = lineIndices ?: tree.lines.indices.toList()
+            val shortest = deal.minOfOrNull { tree.lines[it].size } ?: 0
+            val entry = entryPly.coerceIn(0, (shortest - 1).coerceAtLeast(0))
             return GuidedState(
                 tree = tree,
                 lineIndices = lineIndices,
                 masteryLoop = masteryLoop,
                 passLines = deal,
+                entryPly = entry,
+                plyIndex = entry,
                 finished = deal.isEmpty(),
             )
         }
@@ -181,7 +199,7 @@ fun GuidedState.submit(move: Move): GuidedState {
     val credit = currentLineCredit
     val banked = lineCredits + (passLines[lineIndex] to credit)
     val walkedNext = copy(
-        plyIndex = 0,
+        plyIndex = entryPly,
         ideaRevealed = false,
         wrongAttempts = 0,
         lineAided = false,
@@ -218,4 +236,4 @@ fun GuidedState.revealIdea(): GuidedState = copy(ideaRevealed = true, lineAided 
  * re-deal, not the rewind.
  */
 fun GuidedState.restartLine(): GuidedState =
-    copy(plyIndex = 0, ideaRevealed = false, wrongAttempts = 0, lastEvent = null)
+    copy(plyIndex = entryPly, ideaRevealed = false, wrongAttempts = 0, lastEvent = null)

@@ -46,6 +46,9 @@ typealias Journal = (transform: (TrainingRecord) -> TrainingRecord) -> Unit
  * [kind] decides the rules: LEARN sessions run the mastery loop and end only when every
  * dealt line has a clean unaided walk; REVIEW sessions are one pass, score as scored.
  *
+ * [entryPly] is the earned road in ([com.cheacher.app.training.OpeningEntry]), also
+ * decided at navigation time: every line opens that many shared plies deep.
+ *
  * [wrongShakes] is a monotonic counter (not derived from state) because two identical
  * wrong attempts produce equal events — the UI needs a value that always changes to
  * replay the shake.
@@ -55,11 +58,19 @@ class GuidedViewModel(
     progress: ProgressStore,
     lineIndices: List<Int>?,
     val kind: StudyKind,
+    entryPly: Int = 0,
     private val scope: CoroutineScope,
     private val journal: Journal,
 ) {
     private val _state =
-        MutableStateFlow(GuidedState.start(tree, lineIndices, masteryLoop = kind == StudyKind.LEARN))
+        MutableStateFlow(
+            GuidedState.start(
+                tree,
+                lineIndices,
+                masteryLoop = kind == StudyKind.LEARN,
+                entryPly = entryPly,
+            ),
+        )
     val state: StateFlow<GuidedState> = _state.asStateFlow()
 
     private val _wrongShakes = MutableStateFlow(0)
@@ -114,7 +125,7 @@ class GuidedViewModel(
     fun restartLine() = _state.update { it.restartLine() }
 
     fun restartSession() {
-        _state.update { GuidedState.start(it.tree, it.lineIndices, it.masteryLoop) }
+        _state.update { GuidedState.start(it.tree, it.lineIndices, it.masteryLoop, it.entryPly) }
         journal { it.recordSessionStart(currentEpochMillis()) }
     }
 

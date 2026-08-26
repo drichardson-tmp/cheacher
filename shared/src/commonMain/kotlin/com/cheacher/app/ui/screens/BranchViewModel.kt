@@ -38,6 +38,9 @@ import kotlinx.coroutines.flow.update
  * whole tree. A locked door still shakes the board — feedback, not punishment — but
  * records no miss.
  *
+ * [entryNodeId] is the earned road in ([com.cheacher.app.training.OpeningEntry]), the
+ * other navigation-time snapshot: the round opens there and never reels back past it.
+ *
  * The two counters exist for the same reason as in [GuidedViewModel]: equal events must
  * still replay their effects. [wrongShakes] drives the red shake, [closeFlashes] the
  * green "branch banked" flash.
@@ -48,10 +51,12 @@ class BranchViewModel(
     autoReplyFor: Color?,
     progress: ProgressStore,
     private val allowedNodeIds: Set<String>?,
+    private val entryNodeId: String? = null,
     scope: CoroutineScope,
     private val journal: Journal,
 ) {
-    private val _state = MutableStateFlow(BranchState.start(tree, policy, autoReplyFor, allowedNodeIds))
+    private val _state =
+        MutableStateFlow(BranchState.start(tree, policy, autoReplyFor, allowedNodeIds, entryNodeId))
     val state: StateFlow<BranchState> = _state.asStateFlow()
 
     private val _wrongShakes = MutableStateFlow(0)
@@ -115,7 +120,9 @@ class BranchViewModel(
 
     fun restartSession() {
         lapsedThisRound.clear()
-        _state.update { BranchState.start(it.tree, it.policy, it.autoReplyFor, allowedNodeIds) }
+        _state.update {
+            BranchState.start(it.tree, it.policy, it.autoReplyFor, allowedNodeIds, entryNodeId)
+        }
         journal { it.recordSessionStart(currentEpochMillis(), _state.value.policy) }
     }
 

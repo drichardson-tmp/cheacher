@@ -32,6 +32,7 @@ import com.cheacher.app.progress.StoreHealth
 import com.cheacher.app.progress.TrainingRecord
 import com.cheacher.app.progress.currentEpochMillis
 import com.cheacher.app.training.MistakePolicy
+import com.cheacher.app.training.OpeningEntry
 import com.cheacher.app.training.OpeningStanding
 import com.cheacher.app.training.Progression
 import com.cheacher.app.training.StudyKind
@@ -82,6 +83,8 @@ sealed interface Screen {
         val lineIndices: List<Int>?,
         /** Whether this session is study or retrieval — it sets the rules and the copy. */
         val kind: StudyKind,
+        /** Shared opening plies already behind the learner — see [OpeningEntry]. */
+        val entryPly: Int = 0,
         /** Distinguishes consecutive deals of the same opening, so Continue always restarts. */
         val serial: Int = 0,
     ) : Screen
@@ -98,6 +101,8 @@ sealed interface Screen {
         val oneSided: Boolean,
         /** Null opens the whole tree; otherwise nodes outside this set start locked. */
         val allowedNodeIds: Set<String>?,
+        /** The earned trunk end the round opens on, or null to start at move one. */
+        val entryNodeId: String? = null,
     ) : Screen
 
     /**
@@ -236,32 +241,60 @@ class RootViewModel(val progress: ProgressStore) : ViewModel() {
             val all = records.filterNotNull().first()
             val task = studyPlan(trees, all, currentEpochMillis()).firstOrNull()
             _screen.value = task?.let {
-                Screen.Guided(it.tree.repertoire.id, it.lineIndices, it.kind, serial = ++dealSerial)
+                val record = all[it.tree.repertoire.id] ?: TrainingRecord.empty(it.tree.repertoire.id)
+                Screen.Guided(
+                    repertoireId = it.tree.repertoire.id,
+                    lineIndices = it.lineIndices,
+                    kind = it.kind,
+                    entryPly = entryPlyFor(it.tree, record, it.kind),
+                    serial = ++dealSerial,
+                )
             } ?: Screen.Home
         }
     }
 
     fun openGuided(tree: OpeningTree) {
         viewModelScope.launch {
-            val standing = OpeningStanding(tree, settledRecordFor(tree))
+            val record = settledRecordFor(tree)
+            val standing = OpeningStanding(tree, record)
             val kind = if (standing.learned) StudyKind.REVIEW else StudyKind.LEARN
             val lineIndices = when {
                 _fullTree.value -> null
                 kind == StudyKind.LEARN -> standing.learnDeal
                 else -> null
             }
-            _screen.value = Screen.Guided(tree.repertoire.id, lineIndices, kind, serial = ++dealSerial)
+            _screen.value = Screen.Guided(
+                repertoireId = tree.repertoire.id,
+                lineIndices = lineIndices,
+                kind = kind,
+                entryPly = entryPlyFor(tree, record, kind),
+                serial = ++dealSerial,
+            )
         }
     }
 
+    /**
+     * How deep a session opens into [tree]. LEARN sessions ride the earned entry — the
+     * road in was proven on the first clean line and replaying it before each of the next
+     * ten is toll, not practice. Reviews always start at move one: a review asks whether
+     * the whole thing still holds, and getting to the opening is part of the whole thing.
+     *
+     * "Show the full tree" opts out of every gate, this one included.
+     */
+    private fun entryPlyFor(tree: OpeningTree, record: TrainingRecord, kind: StudyKind): Int =
+        if (_fullTree.value || kind == StudyKind.REVIEW) 0 else OpeningEntry(tree, record).entryPly
+
     fun openBranch(tree: OpeningTree) {
         viewModelScope.launch {
+            val record = settledRecordFor(tree)
             val allowed = if (_fullTree.value) {
                 null
             } else {
-                Progression(tree, settledRecordFor(tree)).syllabusAt(currentEpochMillis()).branchAllowedNodeIds
+                Progression(tree, record).syllabusAt(currentEpochMillis()).branchAllowedNodeIds
             }
-            _screen.value = Screen.Branch(tree.repertoire.id, _policy.value, _oneSided.value, allowed)
+            val entry = if (_fullTree.value) null else OpeningEntry(tree, record).entryNode?.id
+            _screen.value =
+                Screen.Branch(tree.repertoire.id, _policy.value, _oneSided.value, allowed, entry)
         }
     }
 
@@ -381,6 +414,7 @@ fun App() {
                             progress = root.progress,
                             lineIndices = current.lineIndices,
                             kind = current.kind,
+                            entryPly = current.entryPly,
                             scope = sessionScope,
                             journal = root.journalFor(tree),
                         )
@@ -407,6 +441,7 @@ fun App() {
                             autoReplyFor = autoReplyFor,
                             progress = root.progress,
                             allowedNodeIds = current.allowedNodeIds,
+                            entryNodeId = current.entryNodeId,
                             scope = sessionScope,
                             journal = root.journalFor(tree),
                         )
