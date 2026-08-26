@@ -20,7 +20,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -37,7 +38,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.zIndex
+import androidx.compose.animation.core.snap as instantly
 import com.cheacher.app.chess.Move
 import com.cheacher.app.chess.Piece
 import com.cheacher.app.chess.PieceType
@@ -54,7 +58,9 @@ import kotlin.math.roundToInt
 import kotlin.math.sin
 
 /**
- * The board: tap a piece, see its legal squares, tap a destination.
+ * The board: tap a piece, see its legal squares, tap a destination — or just drag the
+ * piece there. Both gestures drive the same selection state, so a drag that is released
+ * short of a legal square simply leaves the piece selected and the tap flow carries on.
  *
  * Presentation-only — every submitted [Move] is legal in [position], but whether it is
  * the *right* move is the trainers' business. Pieces glide between squares on springs;
@@ -81,10 +87,13 @@ fun ChessBoardView(
     pieceRenderer: PieceRenderer = GlyphPieceRenderer,
 ) {
     var selected by remember(position) { mutableStateOf<Int?>(null) }
+    var drag by remember(position) { mutableStateOf<DragState?>(null) }
 
     val legalMoves = remember(position) { position.legalMoves() }
-    val targets = remember(selected, legalMoves) {
-        selected?.let { from -> legalMoves.filter { it.from == from } } ?: emptyList()
+    // A drag owns the origin while it lasts; otherwise the tap selection does.
+    val activeFrom = drag?.from ?: selected
+    val targets = remember(activeFrom, legalMoves) {
+        activeFrom?.let { from -> legalMoves.filter { it.from == from } } ?: emptyList()
     }
     val checkedKing = remember(position) {
         position.kingSquare(position.sideToMove)?.takeIf { position.isInCheck() }
@@ -138,15 +147,19 @@ fun ChessBoardView(
             )
         }
 
-        fun squareAt(tap: Offset): Int? {
-            val x = (tap.x / squarePx).toInt().coerceIn(0, 7)
-            val y = (tap.y / squarePx).toInt().coerceIn(0, 7)
+        // Null off the board: a drag released past the edge is a cancelled move, not a
+        // move to the nearest edge square.
+        fun squareAt(point: Offset): Int? {
+            val x = (point.x / squarePx).toInt()
+            val y = (point.y / squarePx).toInt()
+            if (x !in 0..7 || y !in 0..7) return null
             val file = if (orientation == ChessColor.WHITE) x else 7 - x
             val rank = if (orientation == ChessColor.WHITE) 7 - y else y
             return Squares.of(file, rank)
         }
 
         val coordinateLayouts = rememberCoordinateLayouts(textMeasurer, squarePx)
+        val hovered = drag?.let { squareAt(it.pointer) }
 
         Canvas(modifier = Modifier.fillMaxSize()) {
             drawSquares(squarePx, colors)
@@ -155,7 +168,9 @@ fun ChessBoardView(
                 drawSquareFill(screenOffset(it.from), squarePx, colors.lastMoveGlow)
                 drawSquareFill(screenOffset(it.to), squarePx, colors.lastMoveGlow)
             }
-            selected?.let { drawSquareFill(screenOffset(it), squarePx, colors.selectedGlow) }
+            activeFrom?.let { drawSquareFill(screenOffset(it), squarePx, colors.selectedGlow) }
+            // Under-the-finger square: the drop preview, so a drag can be aimed.
+            hovered?.let { drawSquareOutline(screenOffset(it), squarePx, colors.selectedGlow) }
             checkedKing?.let { drawCheckGlow(screenOffset(it), squarePx, colors.checkGlow) }
             for (target in targets.distinctBy { it.to }) {
                 val origin = screenOffset(target.to)
@@ -176,27 +191,55 @@ fun ChessBoardView(
 
         for (placed in pieces) {
             key(placed.id) {
+                val dragged = drag?.from == placed.square
+                // While dragged the piece tracks the finger with no spring lag; released,
+                // the spec flips back and it either glides to its new square or springs home.
                 val target by animateOffsetAsState(
-                    targetValue = screenOffset(placed.square),
-                    animationSpec = Motion.pieceTravel,
+                    targetValue = if (dragged) {
+                        drag!!.pointer - Offset(squarePx / 2, squarePx / 2)
+                    } else {
+                        screenOffset(placed.square)
+                    },
+                    animationSpec = if (dragged) instantly() else Motion.pieceTravel,
                     label = "piece-${placed.id}",
                 )
                 val lift by animateFloatAsState(
-                    targetValue = if (placed.square == selected) 1.12f else 1f,
+                    targetValue = when {
+                        dragged -> 1.20f
+                        placed.square == selected -> 1.12f
+                        else -> 1f
+                    },
                     animationSpec = Motion.snap(),
                     label = "lift-${placed.id}",
+                )
+                // A hair of tilt, pivoting at the piece's foot — the way a real piece
+                // leans when it is pinched off the board rather than sliding on it.
+                val tilt by animateFloatAsState(
+                    targetValue = if (dragged) -4.5f else 0f,
+                    animationSpec = Motion.snap(),
+                    label = "tilt-${placed.id}",
                 )
                 pieceRenderer.Render(
                     piece = placed.piece,
                     size = squareDp,
                     modifier = Modifier
                         .size(squareDp)
+                        // The piece in hand rides above the rest of the board.
+                        .zIndex(if (dragged) 1f else 0f)
                         .offset { IntOffset(target.x.roundToInt(), target.y.roundToInt()) }
-                        .scale(lift),
+                        .graphicsLayer {
+                            scaleX = lift
+                            scaleY = lift
+                            rotationZ = tilt
+                            transformOrigin = TransformOrigin(0.5f, 0.82f)
+                        },
                 )
             }
         }
 
+        // The two gestures live in separate handlers: the drag detector (inner, so it sees
+        // events first) never consumes the down, and once it passes touch slop its consumed
+        // moves cancel the tap detector — so a press is a tap and a pull is a drag.
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -205,16 +248,20 @@ fun ChessBoardView(
                     detectTapGestures { tap ->
                         val square = squareAt(tap) ?: return@detectTapGestures
                         val from = selected
+                        // Recomputed from [legalMoves], never read from the captured
+                        // `targets`: this gesture block is keyed on [position], so a
+                        // value derived from `selected` would still hold the empty list
+                        // captured when nothing was selected, and no tap could ever
+                        // complete a move.
                         val chosen = if (from != null) {
-                            targets.filter { it.to == square }
+                            legalMoves.filter { it.from == from && it.to == square }
                         } else {
                             emptyList()
                         }
                         when {
                             chosen.isNotEmpty() -> {
                                 selected = null
-                                // Openings never promote, but if one ever does: auto-queen.
-                                onMove(chosen.firstOrNull { it.promotion == PieceType.QUEEN } ?: chosen.first())
+                                onMove(pickMove(chosen))
                             }
                             position[square]?.color == position.sideToMove -> {
                                 selected = if (from == square) null else square
@@ -222,6 +269,39 @@ fun ChessBoardView(
                             else -> selected = null
                         }
                     }
+                }
+                .pointerInput(position, enabled, orientation) {
+                    if (!enabled) return@pointerInput
+                    detectDragGestures(
+                        onDragStart = { start ->
+                            val square = squareAt(start)
+                            if (square != null && position[square]?.color == position.sideToMove) {
+                                selected = square
+                                drag = DragState(square, start)
+                            }
+                        },
+                        onDrag = { change, amount ->
+                            drag?.let {
+                                change.consume()
+                                drag = it.copy(pointer = it.pointer + amount)
+                            }
+                        },
+                        onDragEnd = {
+                            val released = drag ?: return@detectDragGestures
+                            drag = null
+                            val square = squareAt(released.pointer)
+                            val chosen = legalMoves.filter { it.from == released.from && it.to == square }
+                            if (chosen.isNotEmpty()) {
+                                selected = null
+                                onMove(pickMove(chosen))
+                            } else {
+                                // Dropped nowhere useful: the piece springs home but stays
+                                // picked up, so the tap flow can finish the move.
+                                selected = released.from
+                            }
+                        },
+                        onDragCancel = { drag = null },
+                    )
                 },
         )
     }
@@ -302,6 +382,17 @@ private fun DrawScope.drawCoordinates(
     }
 }
 
+/** The square a drag is hovering: an inset outline, distinct from the filled origin. */
+private fun DrawScope.drawSquareOutline(origin: Offset, squarePx: Float, color: Color) {
+    val inset = squarePx * 0.05f
+    drawRect(
+        color = color,
+        topLeft = origin + Offset(inset, inset),
+        size = Size(squarePx - inset * 2, squarePx - inset * 2),
+        style = Stroke(width = squarePx * 0.06f),
+    )
+}
+
 private fun DrawScope.drawSquareFill(origin: Offset, squarePx: Float, color: Color) {
     drawRect(color = color, topLeft = origin, size = Size(squarePx, squarePx))
 }
@@ -315,6 +406,13 @@ private fun DrawScope.drawCheckGlow(origin: Offset, squarePx: Float, color: Colo
         style = Stroke(width = squarePx * 0.1f),
     )
 }
+
+/** A piece in hand: where it came from, and where the finger is now (board pixels). */
+private data class DragState(val from: Int, val pointer: Offset)
+
+/** Openings never promote, but if one ever does: auto-queen. */
+private fun pickMove(candidates: List<Move>): Move =
+    candidates.firstOrNull { it.promotion == PieceType.QUEEN } ?: candidates.first()
 
 // ------------------------------------------------------------------ piece identity
 

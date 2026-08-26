@@ -93,7 +93,7 @@ fun BranchScreen(
         LinearProgressIndicator(
             progress = { progressFraction },
             modifier = Modifier.fillMaxWidth(),
-            color = if (state.progress.failedLines > 0) CheacherTheme.colors.streakBrass else MaterialTheme.colorScheme.tertiary,
+            color = if (state.progress.failedLines > 0) CheacherTheme.colors.streakAccent else MaterialTheme.colorScheme.tertiary,
         )
 
         UnlockBannerCard(banner = unlock, onDismiss = viewModel::dismissUnlock)

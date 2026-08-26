@@ -23,87 +23,93 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 /**
- * Cheacher's visual identity: **warm wood and cool ink**.
+ * Cheacher's visual identity: **lagoon and ember**.
  *
- * The app should feel like a well-loved chess study — walnut boards, cream paper,
- * ink annotations, one flash of brass. The palette is built on classic colour theory:
+ * The app should feel like clear water over a reef — cool, deep, and lit from above,
+ * with one hot spark of coral. The palette is a true complementary scheme:
  *
- * - **60/30: a warm analogous field.** Paper, parchment, and wood all sit on one short
- *   arc of ochre-to-umber hues; they are the dominant field and never compete.
- * - **The complement: iron-gall ink.** Real iron-gall ink is not brown — it dries to a
- *   cool blue-black with a hint of indigo. Every text shade sits on that cool axis, so
- *   *warm field against cool ink* is the scheme's one fundamental contrast, and the
- *   warm hues get the complement they were missing.
- * - **10: brass.** One metal, used only for the moments that deserve it — streaks,
- *   unlocks, the cursor ring.
- * - **Verdicts as natural pigments.** Leaf green and madder red, tuned so a banked
- *   branch is clearly *lighter* than a lost one — the verdict reads by value as well
- *   as hue, which is what keeps it legible to deuteranopic eyes.
+ * - **60/30: the teal field.** Foam, shallow, and shoal sit on one short arc of
+ *   blue-green; they are the dominant field and never compete with content. The board's
+ *   two woods are the same arc, pushed apart in value.
+ * - **The complement: ember.** Teal's opposite across the wheel is a warm coral-red.
+ *   It is the *only* warm hue in the app, which is what makes it read as heat — used
+ *   for streaks, unlocks, the selection ring, and nothing else.
+ * - **The split: sea green and wash blue.** Verdict green sits just off the teal arc so
+ *   "correct" never blends into the field, and the review wash leans blue so a reviewed
+ *   line is legibly not-new without shouting.
+ * - **Verdicts by value, not just hue.** Correct is a clear step *lighter* than miss, so
+ *   the scoreboard survives deuteranopia — the one rule inherited unchanged.
  *
  * Every text-bearing pairing here is enforced by `PaletteContrastTest`: the palette is
  * verified content, exactly like the repertoires.
  */
-object Ink {
-    // The warm field: one analogous arc from paper to walnut.
-    val paper = Color(0xFFFDF8EE)
-    val parchment = Color(0xFFF6EFE3)
-    val vellum = Color(0xFFEFE4D0)
-    val boardLight = Color(0xFFEED9B7)
-    val boardDark = Color(0xFF9A6743)
-    val walnut = Color(0xFF6B4A31)
-    val walnutDeep = Color(0xFF4A3122)
-    val ruleLine = Color(0xFF9A8A6A)
+object Lagoon {
+    // The teal field: one analogous arc from foam to abyss.
+    val foam = Color(0xFFF4FBF9)
+    val shallow = Color(0xFFE7F4F1)
+    val shoal = Color(0xFFD2E8E3)
+    val tealPale = Color(0xFFB6DED8)
+    val teal = Color(0xFF0F6E6A)
+    val tealDeep = Color(0xFF0A4B48)
+    val tealBright = Color(0xFF5FC8BE)
+    val ruleLine = Color(0xFF6B8C87)
 
-    // The cool axis: iron-gall ink, blue-black leaning indigo.
-    val ink = Color(0xFF262B33)
-    val inkFaded = Color(0xFF5C6068)
-    val inkWash = Color(0xFF4E5A75)
+    // The deep end: text-grade blue-greens, near-black but never neutral.
+    val abyss = Color(0xFF0D2E30)
+    val abyssFaded = Color(0xFF47605F)
 
-    // Brass, the single accent. `brassDeep` is the text-grade cut; the bright cuts
-    // are for glows and rings, never for words.
-    val brass = Color(0xFFB8863B)
-    val brassDeep = Color(0xFF96682A)
-    val brassBright = Color(0xFFD9A84E)
+    // Ember, the single warm accent and teal's complement. `emberDeep` is the
+    // text-grade cut; `emberBright` is for glows and rings, never for words.
+    val ember = Color(0xFFB2442A)
+    val emberDeep = Color(0xFF8F3320)
+    val emberBright = Color(0xFFE0764F)
 
-    // Natural pigments for verdicts. The *Fill cuts carry white text on chips; the
-    // plain cuts are text-grade on paper.
-    val leaf = Color(0xFF477443)
-    val leafFill = Color(0xFF5F8F52)
-    val leafBright = Color(0xFF6FA36A)
-    val madder = Color(0xFFA83E32)
-    val madderFill = Color(0xFF8E2F24)
-    val madderSoft = Color(0xFFD8887F)
+    // Board: the same teal arc, pushed apart in value so pieces read on both squares.
+    val boardLight = Color(0xFFCFE6E0)
+    val boardDark = Color(0xFF35766F)
 
-    // Pieces: cream and ink, each with the edge that carries it on its same-tone square.
-    val pieceCream = Color(0xFFFBF3E4)
-    val pieceCreamEdge = Color(0xFF3A322A)
-    val pieceInk = Color(0xFF20242C)
-    val pieceInkEdgeDay = Color(0xFF0F1115)
-    val pieceInkEdgeNight = Color(0xFFC9BFA9)
+    // Verdicts. Sea green sits off the teal arc; madder-coral is ember pushed dark.
+    val seaGreen = Color(0xFF1C6B4F)
+    val seaGreenFill = Color(0xFF47915F)
+    val seaGreenBright = Color(0xFF6FD39A)
+    val crimson = Color(0xFFB3241C)
+    val crimsonFill = Color(0xFF93291E)
+    val crimsonSoft = Color(0xFFF08A7A)
 
-    // Night study: same wood, lamp off — darker values, slightly desaturated, and the
-    // iron-gall ink flips to the pale role while staying cool.
-    val nightPaper = Color(0xFF201A14)
-    val nightCard = Color(0xFF2B231B)
-    val nightVellum = Color(0xFF3A2F24)
-    val nightInk = Color(0xFFD9DDE4)
-    val nightInkFaded = Color(0xFFAEB0B6)
-    val nightRuleLine = Color(0xFF8C7B60)
-    val nightBoardLight = Color(0xFFC4A87E)
-    val nightBoardDark = Color(0xFF5E4630)
-    val nightLeafFill = Color(0xFF55814B)
-    val nightMadderFill = Color(0xFF7E2B20)
-    val nightInkWash = Color(0xFFA9B4CD)
-    val lockedGhostDay = Color(0xFFE9DFCB)
-    val lockedGhostNight = Color(0xFF352C22)
+    // The review wash: the cool blue neighbour, for "you have seen this before".
+    val wash = Color(0xFF3D6E86)
+    val washNight = Color(0xFF8FB6D8)
+
+    // Pieces: cream and abyss, each with the edge that carries it on its same-tone square.
+    val pieceCream = Color(0xFFFAF6EC)
+    val pieceCreamEdge = Color(0xFF123033)
+    val pieceInk = Color(0xFF0E2225)
+    val pieceInkEdgeDay = Color(0xFF05131A)
+    val pieceInkEdgeNight = Color(0xFFC8DAD6)
+
+    // Night dive: same water, deeper — the field drops to near-black teal and the
+    // pale roles flip up, while every hue stays on the same arc.
+    val nightDeep = Color(0xFF0B1E20)
+    val nightCard = Color(0xFF12292B)
+    val nightVellum = Color(0xFF1B383A)
+    val nightInk = Color(0xFFD6EAE7)
+    val nightInkFaded = Color(0xFF9DB5B3)
+    val nightRuleLine = Color(0xFF6E908C)
+    val nightBoardLight = Color(0xFF9DC4BE)
+    val nightBoardDark = Color(0xFF2E5E5A)
+    val nightSeaGreenFill = Color(0xFF4A9462)
+    val nightCrimsonFill = Color(0xFF7E241A)
+    val nightInProgress = Color(0xFF21474A)
+    val lockedGhostDay = Color(0xFFDCEDE9)
+    val lockedGhostNight = Color(0xFF16302F)
 }
 
 /**
- * The app-specific colour roles Material3's scheme has no words for: board wood,
- * move annotations, verdict pigments, the brass moments, and the tree's four states.
+ * The app-specific colour roles Material3's scheme has no words for: board water,
+ * move annotations, verdict pigments, the ember moments, and the tree's four states.
  *
  * One immutable value per scheme; both are derived from the same hue relationships in
- * [Ink], so day and night are the same study with the lamp on or off. Reach it as
+ * [Lagoon], so day and night are the same reef at two depths. Reach it as
  * `CheacherTheme.colors` — the Material slots keep carrying the standard chrome.
  */
 @Immutable
@@ -123,7 +129,7 @@ data class CheacherColors(
     val onVerdict: Color,
     val reviewTint: Color,
     val lockedGhost: Color,
-    val streakBrass: Color,
+    val streakAccent: Color,
     val treeUnvisited: Color,
     val treeInProgress: Color,
     val treeCompleted: Color,
@@ -132,93 +138,93 @@ data class CheacherColors(
 )
 
 internal val DayCheacherColors = CheacherColors(
-    boardLight = Ink.boardLight,
-    boardDark = Ink.boardDark,
-    lastMoveGlow = Ink.brassBright.copy(alpha = 0.40f),
-    selectedGlow = Ink.brass.copy(alpha = 0.55f),
-    targetDot = Ink.ink.copy(alpha = 0.35f),
-    checkGlow = Ink.madder.copy(alpha = 0.50f),
-    pieceCream = Ink.pieceCream,
-    pieceCreamEdge = Ink.pieceCreamEdge,
-    pieceInk = Ink.pieceInk,
-    pieceInkEdge = Ink.pieceInkEdgeDay,
-    verdictCorrect = Ink.leafFill,
-    verdictMiss = Ink.madderFill,
-    onVerdict = Ink.paper,
-    reviewTint = Ink.inkWash,
-    lockedGhost = Ink.lockedGhostDay,
-    streakBrass = Ink.brassDeep,
-    treeUnvisited = Ink.vellum,
-    treeInProgress = Ink.boardLight,
-    treeCompleted = Ink.leafFill,
-    treeFailed = Ink.madderFill,
-    treeOpenText = Ink.ink,
+    boardLight = Lagoon.boardLight,
+    boardDark = Lagoon.boardDark,
+    lastMoveGlow = Lagoon.emberBright.copy(alpha = 0.40f),
+    selectedGlow = Lagoon.ember.copy(alpha = 0.55f),
+    targetDot = Lagoon.abyss.copy(alpha = 0.35f),
+    checkGlow = Lagoon.crimson.copy(alpha = 0.50f),
+    pieceCream = Lagoon.pieceCream,
+    pieceCreamEdge = Lagoon.pieceCreamEdge,
+    pieceInk = Lagoon.pieceInk,
+    pieceInkEdge = Lagoon.pieceInkEdgeDay,
+    verdictCorrect = Lagoon.seaGreenFill,
+    verdictMiss = Lagoon.crimsonFill,
+    onVerdict = Lagoon.foam,
+    reviewTint = Lagoon.wash,
+    lockedGhost = Lagoon.lockedGhostDay,
+    streakAccent = Lagoon.emberDeep,
+    treeUnvisited = Lagoon.shoal,
+    treeInProgress = Lagoon.boardLight,
+    treeCompleted = Lagoon.seaGreenFill,
+    treeFailed = Lagoon.crimsonFill,
+    treeOpenText = Lagoon.abyss,
 )
 
 internal val NightCheacherColors = CheacherColors(
-    boardLight = Ink.nightBoardLight,
-    boardDark = Ink.nightBoardDark,
-    lastMoveGlow = Ink.brassBright.copy(alpha = 0.35f),
-    selectedGlow = Ink.brassBright.copy(alpha = 0.50f),
-    // A dark dot vanishes on dark wood, so at night the annotation ink goes pale.
-    targetDot = Ink.pieceCream.copy(alpha = 0.40f),
-    checkGlow = Ink.madderSoft.copy(alpha = 0.50f),
-    pieceCream = Ink.pieceCream,
-    pieceCreamEdge = Ink.pieceCreamEdge,
-    pieceInk = Ink.pieceInk,
+    boardLight = Lagoon.nightBoardLight,
+    boardDark = Lagoon.nightBoardDark,
+    lastMoveGlow = Lagoon.emberBright.copy(alpha = 0.35f),
+    selectedGlow = Lagoon.emberBright.copy(alpha = 0.50f),
+    // A dark dot vanishes on dark water, so at night the annotation ink goes pale.
+    targetDot = Lagoon.pieceCream.copy(alpha = 0.40f),
+    checkGlow = Lagoon.crimsonSoft.copy(alpha = 0.50f),
+    pieceCream = Lagoon.pieceCream,
+    pieceCreamEdge = Lagoon.pieceCreamEdge,
+    pieceInk = Lagoon.pieceInk,
     // Lamp off: the dark pieces are carried by rim light instead of shadow.
-    pieceInkEdge = Ink.pieceInkEdgeNight,
-    verdictCorrect = Ink.nightLeafFill,
-    verdictMiss = Ink.nightMadderFill,
-    onVerdict = Ink.paper,
-    reviewTint = Ink.nightInkWash,
-    lockedGhost = Ink.lockedGhostNight,
-    streakBrass = Ink.brassBright,
-    treeUnvisited = Ink.nightVellum,
-    treeInProgress = Ink.walnutDeep,
-    treeCompleted = Ink.nightLeafFill,
-    treeFailed = Ink.nightMadderFill,
-    treeOpenText = Ink.nightInk,
+    pieceInkEdge = Lagoon.pieceInkEdgeNight,
+    verdictCorrect = Lagoon.nightSeaGreenFill,
+    verdictMiss = Lagoon.nightCrimsonFill,
+    onVerdict = Lagoon.foam,
+    reviewTint = Lagoon.washNight,
+    lockedGhost = Lagoon.lockedGhostNight,
+    streakAccent = Lagoon.emberBright,
+    treeUnvisited = Lagoon.nightVellum,
+    treeInProgress = Lagoon.nightInProgress,
+    treeCompleted = Lagoon.nightSeaGreenFill,
+    treeFailed = Lagoon.nightCrimsonFill,
+    treeOpenText = Lagoon.nightInk,
 )
 
 internal val LightColors = lightColorScheme(
-    primary = Ink.walnut,
-    onPrimary = Ink.paper,
-    primaryContainer = Ink.boardLight,
-    onPrimaryContainer = Ink.walnutDeep,
-    secondary = Ink.brassDeep,
-    onSecondary = Ink.paper,
-    tertiary = Ink.leaf,
-    onTertiary = Ink.paper,
-    background = Ink.parchment,
-    onBackground = Ink.ink,
-    surface = Ink.paper,
-    onSurface = Ink.ink,
-    surfaceVariant = Ink.vellum,
-    onSurfaceVariant = Ink.inkFaded,
-    error = Ink.madder,
-    onError = Ink.paper,
-    outline = Ink.ruleLine,
+    primary = Lagoon.teal,
+    onPrimary = Lagoon.foam,
+    primaryContainer = Lagoon.tealPale,
+    onPrimaryContainer = Lagoon.tealDeep,
+    secondary = Lagoon.ember,
+    onSecondary = Lagoon.foam,
+    tertiary = Lagoon.seaGreen,
+    onTertiary = Lagoon.foam,
+    background = Lagoon.shallow,
+    onBackground = Lagoon.abyss,
+    surface = Lagoon.foam,
+    onSurface = Lagoon.abyss,
+    surfaceVariant = Lagoon.shoal,
+    onSurfaceVariant = Lagoon.abyssFaded,
+    error = Lagoon.crimson,
+    onError = Lagoon.foam,
+    outline = Lagoon.ruleLine,
 )
 
 internal val DarkColors = darkColorScheme(
-    primary = Ink.brassBright,
-    onPrimary = Ink.nightPaper,
-    primaryContainer = Ink.walnutDeep,
-    onPrimaryContainer = Ink.boardLight,
-    secondary = Ink.brass,
-    onSecondary = Ink.nightPaper,
-    tertiary = Ink.leafBright,
-    onTertiary = Ink.nightPaper,
-    background = Ink.nightPaper,
-    onBackground = Ink.nightInk,
-    surface = Ink.nightCard,
-    onSurface = Ink.nightInk,
-    surfaceVariant = Ink.nightVellum,
-    onSurfaceVariant = Ink.nightInkFaded,
-    error = Ink.madderSoft,
-    onError = Ink.nightPaper,
-    outline = Ink.nightRuleLine,
+    primary = Lagoon.tealBright,
+    onPrimary = Lagoon.nightDeep,
+    primaryContainer = Lagoon.tealDeep,
+    onPrimaryContainer = Lagoon.tealPale,
+    secondary = Lagoon.emberBright,
+    onSecondary = Lagoon.nightDeep,
+    tertiary = Lagoon.seaGreenBright,
+    onTertiary = Lagoon.nightDeep,
+    background = Lagoon.nightDeep,
+    onBackground = Lagoon.nightInk,
+    surface = Lagoon.nightCard,
+    onSurface = Lagoon.nightInk,
+    surfaceVariant = Lagoon.nightVellum,
+    onSurfaceVariant = Lagoon.nightInkFaded,
+    error = Lagoon.crimsonSoft,
+    onError = Lagoon.nightDeep,
+    outline = Lagoon.nightRuleLine,
 )
 
 /**
