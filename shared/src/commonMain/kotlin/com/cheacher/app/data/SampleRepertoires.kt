@@ -12,7 +12,27 @@ import com.cheacher.app.domain.repertoire
  * here fails the build, not the learner.
  */
 object SampleRepertoires {
-    val all: List<Repertoire> by lazy { listOf(kingsPawn, italianGame, sicilianCrossroads) }
+    val all: List<Repertoire> by lazy {
+        listOf(
+            // The on-ramp, then the 1. e4 shelf...
+            kingsPawn,
+            italianGame,
+            ruyLopez,
+            openGame,
+            sicilianCrossroads,
+            frenchDefence,
+            caroKann,
+            kingsPawnSidelines,
+            // ...the 1. d4 shelf...
+            queensGambit,
+            indianDefences,
+            queensPawnSystems,
+            // ...the flank openings, and the whole first-move vocabulary.
+            englishOpening,
+            retiOpening,
+            twentyFirstMoves,
+        )
+    }
 
     fun byId(id: String): Repertoire = all.first { it.id == id }
 
