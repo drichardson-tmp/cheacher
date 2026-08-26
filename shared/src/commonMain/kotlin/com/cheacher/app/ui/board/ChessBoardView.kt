@@ -53,6 +53,9 @@ import com.cheacher.app.ui.theme.CheacherColors
 import com.cheacher.app.ui.theme.CheacherTheme
 import com.cheacher.app.ui.theme.Motion
 import com.cheacher.app.chess.Color as ChessColor
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.cos
@@ -73,9 +76,13 @@ import kotlin.math.roundToInt
  * other chair. It shrinks just enough to keep its corners inside the frame as it goes,
  * and the glyphs counter-rotate so they are never read upside down. Coordinates belong
  * to whichever chair is nearest: they fade out through the turn and come back relabelled.
+ * A position jumping backward winds the board briefly against the turn, then releases a
+ * quick revolution; the same rotation bends every returning piece's path toward home.
  *
  * @param shakeTrigger increment to play the wrong-move shake (a rejected idea should
  *   *feel* rejected, not just be silently ignored).
+ * @param holdBeforeReset preserve the completed position for one success beat before a
+ *   backward jump begins. Failure and manual resets should leave this false.
  * @param onSquareTap when set, the board stops being a chessboard and becomes a grid of
  *   64 buttons: taps report their square and nothing selects, moves, or drags. The square
  *   drill's whole interface.
@@ -94,22 +101,68 @@ fun ChessBoardView(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
     shakeTrigger: Int = 0,
+    holdBeforeReset: Boolean = false,
     showCoordinates: Boolean = true,
     onSquareTap: ((Int) -> Unit)? = null,
     spotlight: Spotlight? = null,
     pieceRenderer: PieceRenderer = GlyphPieceRenderer,
 ) {
-    var selected by remember(position) { mutableStateOf<Int?>(null) }
-    var drag by remember(position) { mutableStateOf<DragState?>(null) }
+    // The rendered board normally shadows the model immediately. On a backward jump it
+    // deliberately keeps the just-finished position: first the success beat (when asked
+    // for), then the reverse wind-up. The new position is handed to PieceTracker at the
+    // instant the forward spin releases, which turns otherwise straight return paths
+    // into the curved, gravity-like sweep.
+    var boardPosition by remember { mutableStateOf(position) }
+    var boardLastMove by remember { mutableStateOf(lastMove) }
+    var boardOrientation by remember { mutableStateOf(orientation) }
+    val resetDegrees = remember { Animatable(0f) }
+    val resetScale = remember { Animatable(1f) }
+    var resetActive by remember { mutableStateOf(false) }
+    val resetRequested = BoardTurn.isReset(boardPosition, position)
+    LaunchedEffect(position, lastMove, orientation, holdBeforeReset) {
+        if (BoardTurn.isReset(boardPosition, position)) {
+            resetActive = true
+            if (holdBeforeReset) delay(Motion.boardSuccessHoldMillis)
+            resetDegrees.snapTo(0f)
+            resetScale.snapTo(1f)
 
-    val legalMoves = remember(position) { position.legalMoves() }
+            // Compress as the completed slab winds backward. Once wound, the minimum
+            // inscribed scale lets it revolve without its corners knocking the frame.
+            coroutineScope {
+                launch { resetDegrees.animateTo(-12f, Motion.boardResetRev) }
+                launch { resetScale.animateTo(BoardTurn.minimumScale, Motion.boardResetRev) }
+            }
+
+            // Release the new layout with the spin, not before it. Pieces receive their
+            // home squares here and ride the board's rotation while their springs settle.
+            boardPosition = position
+            boardLastMove = lastMove
+            boardOrientation = orientation
+            resetDegrees.animateTo(360f, Motion.boardResetSpin)
+
+            // 360° and 0° are the same picture, so the snap is invisible; only the last
+            // little expansion remains, reading as every piece locking into its square.
+            resetDegrees.snapTo(0f)
+            resetScale.animateTo(1f, Motion.boardResetLand)
+            resetActive = false
+        } else if (!resetActive) {
+            boardPosition = position
+            boardLastMove = lastMove
+            boardOrientation = orientation
+        }
+    }
+
+    var selected by remember(boardPosition) { mutableStateOf<Int?>(null) }
+    var drag by remember(boardPosition) { mutableStateOf<DragState?>(null) }
+
+    val legalMoves = remember(boardPosition) { boardPosition.legalMoves() }
     // A drag owns the origin while it lasts; otherwise the tap selection does.
     val activeFrom = drag?.from ?: selected
     val targets = remember(activeFrom, legalMoves) {
         activeFrom?.let { from -> legalMoves.filter { it.from == from } } ?: emptyList()
     }
-    val checkedKing = remember(position) {
-        position.kingSquare(position.sideToMove)?.takeIf { position.isInCheck() }
+    val checkedKing = remember(boardPosition) {
+        boardPosition.kingSquare(boardPosition.sideToMove)?.takeIf { boardPosition.isInCheck() }
     }
 
     // Wrong-move shake: a quick damped horizontal wobble.
@@ -127,12 +180,12 @@ fun ChessBoardView(
     // layer rides this rotation, so the flip is one sweeping motion rather than 32
     // independently travelling pieces.
     val flipDegrees by animateFloatAsState(
-        targetValue = if (orientation == ChessColor.WHITE) 0f else 180f,
-        animationSpec = Motion.tableTurn,
+        targetValue = if (boardOrientation == ChessColor.WHITE) 0f else 180f,
+        animationSpec = if (resetRequested || resetActive) Motion.boardResetTurn else Motion.tableTurn,
         label = "board-flip",
     )
 
-    val pieces = rememberTrackedPieces(position)
+    val pieces = rememberTrackedPieces(boardPosition)
     val colors = CheacherTheme.colors
     val textMeasurer = rememberTextMeasurer()
 
@@ -160,10 +213,10 @@ fun ChessBoardView(
             modifier = Modifier
                 .fillMaxSize()
                 .graphicsLayer {
-                    rotationZ = flipDegrees
+                    rotationZ = flipDegrees + resetDegrees.value
                     // Shrunk to stay inside its own bounding box as it goes round, and
-                    // shrunk in one dip rather than two — see [BoardTurn.scaleAt].
-                    val fit = BoardTurn.scaleAt(flipDegrees)
+                    // held at the universal fit during a reset's full revolution.
+                    val fit = minOf(BoardTurn.scaleAt(flipDegrees), resetScale.value)
                     scaleX = fit
                     scaleY = fit
                 }
@@ -173,7 +226,7 @@ fun ChessBoardView(
                 drawSquares(squarePx, colors)
                 drawSheen(boardPx)
                 if (showCoordinates) drawCoordinates(coordinateLayouts, squarePx, flipDegrees, colors)
-                lastMove?.let {
+                boardLastMove?.let {
                     drawSquareFill(squareOffset(it.from), squarePx, colors.lastMoveGlow)
                     drawSquareFill(squareOffset(it.to), squarePx, colors.lastMoveGlow)
                 }
@@ -188,7 +241,7 @@ fun ChessBoardView(
                 for (target in targets.distinctBy { it.to }) {
                     val origin = squareOffset(target.to)
                     val centre = origin + Offset(squarePx / 2, squarePx / 2)
-                    if (position[target.to] != null) {
+                    if (boardPosition[target.to] != null) {
                         // Capture: a ring around the victim rather than a dot on top of it.
                         drawCircle(
                             color = colors.targetDot,
@@ -264,8 +317,8 @@ fun ChessBoardView(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .pointerInput(position, enabled) {
-                        if (!enabled) return@pointerInput
+                    .pointerInput(boardPosition, enabled, resetRequested, resetActive) {
+                        if (!enabled || resetRequested || resetActive) return@pointerInput
                         detectTapGestures { tap ->
                             val square = squareAt(tap) ?: return@detectTapGestures
                             // Grid-of-buttons mode: the tap *is* the answer, so none of the
@@ -276,7 +329,7 @@ fun ChessBoardView(
                             }
                             val from = selected
                             // Recomputed from [legalMoves], never read from the captured
-                            // `targets`: this gesture block is keyed on [position], so a
+                            // `targets`: this gesture block is keyed on [boardPosition], so a
                             // value derived from `selected` would still hold the empty list
                             // captured when nothing was selected, and no tap could ever
                             // complete a move.
@@ -290,20 +343,20 @@ fun ChessBoardView(
                                     selected = null
                                     onMove(pickMove(chosen))
                                 }
-                                position[square]?.color == position.sideToMove -> {
+                                boardPosition[square]?.color == boardPosition.sideToMove -> {
                                     selected = if (from == square) null else square
                                 }
                                 else -> selected = null
                             }
                         }
                     }
-                    .pointerInput(position, enabled) {
+                    .pointerInput(boardPosition, enabled, resetRequested, resetActive) {
                         // Nothing to drag when the board is a grid of buttons.
-                        if (!enabled || onSquareTap != null) return@pointerInput
+                        if (!enabled || resetRequested || resetActive || onSquareTap != null) return@pointerInput
                         detectDragGestures(
                             onDragStart = { start ->
                                 val square = squareAt(start)
-                                if (square != null && position[square]?.color == position.sideToMove) {
+                                if (square != null && boardPosition[square]?.color == boardPosition.sideToMove) {
                                     selected = square
                                     drag = DragState(square, start)
                                 }

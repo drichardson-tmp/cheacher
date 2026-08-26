@@ -264,18 +264,24 @@ private fun BranchState.close(node: TreeNode, status: NodeStatus): BranchState {
     val rootClosed = tree.rootChildren.all { updated[it.id]?.isClosed == true }
     val junction = if (rootClosed) null else nearestOpenJunction(node, updated)
 
+    val closeEvent = if (rootClosed) {
+        BranchEvent.SessionComplete
+    } else {
+        BranchEvent.BranchClosed(node, junction)
+    }
     val snapped = copy(
         cursorId = junction?.id,
         statuses = updated,
         strikes = 0,
         finished = rootClosed,
-        lastEvent = if (rootClosed) {
-            BranchEvent.SessionComplete
-        } else {
-            BranchEvent.BranchClosed(node, junction)
-        },
+        lastEvent = closeEvent,
     )
-    return if (rootClosed) snapped else snapped.autoReply()
+    if (rootClosed) return snapped
+
+    // Auto-replies may advance the cursor after the snap, but closing the branch is still
+    // the user-visible event. Preserve it so celebration, journalling, and reset motion
+    // do not disappear merely because Cheacher also dealt the opponent's next move.
+    return snapped.autoReply().copy(lastEvent = closeEvent)
 }
 
 /**

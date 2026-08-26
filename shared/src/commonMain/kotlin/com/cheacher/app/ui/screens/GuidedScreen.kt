@@ -40,6 +40,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.cheacher.app.chess.Color as ChessColor
 import com.cheacher.app.domain.TreeNode
+import com.cheacher.app.training.GuidedEvent
 import com.cheacher.app.training.StudyKind
 import com.cheacher.app.ui.board.ChessBoardView
 import com.cheacher.app.ui.theme.CheacherTheme
@@ -188,6 +189,7 @@ fun GuidedScreen(
                 orientation = state.prompt?.mover ?: state.tree.repertoire.perspective,
                 onMove = viewModel::onMove,
                 shakeTrigger = shakes,
+                holdBeforeReset = state.lastEvent is GuidedEvent.LineComplete,
                 modifier = Modifier.fillMaxWidth(),
             )
 

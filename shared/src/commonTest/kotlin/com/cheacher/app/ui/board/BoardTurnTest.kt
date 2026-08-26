@@ -1,6 +1,8 @@
 package com.cheacher.app.ui.board
 
 import androidx.compose.ui.geometry.Offset
+import com.cheacher.app.chess.Move
+import com.cheacher.app.chess.Position
 import com.cheacher.app.chess.Squares
 import kotlin.math.PI
 import kotlin.test.Test
@@ -9,6 +11,23 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class BoardTurnTest {
+
+    @Test
+    fun onlyNonForwardChessTimeStartsAReset() {
+        val start = Position.INITIAL
+        val afterWhite = start.applyUnchecked(Move(square("e2"), square("e4")))
+        val afterBlack = afterWhite.applyUnchecked(Move(square("e7"), square("e5")))
+
+        assertEquals(0, BoardTurn.plyIndex(start))
+        assertEquals(1, BoardTurn.plyIndex(afterWhite))
+        assertEquals(2, BoardTurn.plyIndex(afterBlack))
+        assertTrue(!BoardTurn.isReset(start, afterWhite))
+        assertTrue(!BoardTurn.isReset(afterWhite, afterBlack))
+        assertTrue(BoardTurn.isReset(afterBlack, start))
+
+        val siblingAtSamePly = start.applyUnchecked(Move(square("d2"), square("d4")))
+        assertTrue(BoardTurn.isReset(afterWhite, siblingAtSamePly))
+    }
 
     @Test
     fun squareOriginsUseOneWhiteAtBottomBoardFrame() {
