@@ -26,6 +26,27 @@ data class LineReview(
 )
 
 /**
+ * The play-out sparring ledger: the adaptive engine strength and the game tallies
+ * behind it. One rating per repertoire — closing out a King's Indian is a different
+ * skill from closing out an Italian, and each opening's engine meets you where that
+ * opening left you.
+ */
+@Serializable
+data class SparringRecord(
+    /** The engine's current level: it always plays *at* this rating. Starts at 700. */
+    @SerialName("rating")
+    val rating: Int = com.cheacher.app.engine.SparringElo.START,
+    @SerialName("games_played")
+    val gamesPlayed: Int = 0,
+    @SerialName("wins")
+    val wins: Int = 0,
+    @SerialName("draws")
+    val draws: Int = 0,
+    @SerialName("losses")
+    val losses: Int = 0,
+)
+
+/**
  * Everything Cheacher remembers about a learner and one repertoire.
  *
  * Pure data plus pure accumulation functions — no store, no clock, no tree. The shape is
@@ -91,6 +112,9 @@ data class TrainingRecord(
     val branchCleanSweeps: Int = 0,
     @SerialName("last_policy")
     val lastPolicy: MistakePolicy? = null,
+    /** Defaulted so records written before play-out existed still decode. */
+    @SerialName("sparring")
+    val sparring: SparringRecord = SparringRecord(),
 ) {
     val totalMisses: Int get() = missCounts.values.sum()
 
@@ -202,6 +226,22 @@ data class TrainingRecord(
         copy(
             branchSessionsCompleted = branchSessionsCompleted + 1,
             branchCleanSweeps = if (cleanSweep) branchCleanSweeps + 1 else branchCleanSweeps,
+        )
+
+    /**
+     * One finished play-out game, scored 1 / ½ / 0 for the learner. The engine played
+     * at [SparringRecord.rating], so the expected score is ½ and the update collapses
+     * to ±K/2 — win a game, the engine climbs ~32 points; lose one, it eases off.
+     */
+    fun recordSparringGame(score: Double): TrainingRecord =
+        copy(
+            sparring = sparring.copy(
+                rating = com.cheacher.app.engine.SparringElo.updated(sparring.rating, score),
+                gamesPlayed = sparring.gamesPlayed + 1,
+                wins = sparring.wins + if (score >= 1.0) 1 else 0,
+                draws = sparring.draws + if (score == 0.5) 1 else 0,
+                losses = sparring.losses + if (score <= 0.0) 1 else 0,
+            ),
         )
 
     /** Consecutive clean blind recalls of [leafId]'s line, zero if never proven blind. */

@@ -25,6 +25,16 @@ android {
         }
     }
 
+    packaging {
+        jniLibs {
+            // src/main/jniLibs carries Stockfish 11 disguised as libstockfish.so (see
+            // jniLibs/README.md). It is an executable, and exec() needs a real file on
+            // disk — legacy packaging keeps native libs extracted instead of paged
+            // straight from the APK.
+            useLegacyPackaging = true
+        }
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
