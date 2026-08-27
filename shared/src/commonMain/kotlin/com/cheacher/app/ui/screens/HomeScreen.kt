@@ -33,6 +33,7 @@ import com.cheacher.app.progress.MoveDrillRecord
 import com.cheacher.app.progress.TrainingRecord
 import com.cheacher.app.training.MistakePolicy
 import com.cheacher.app.training.OpeningStanding
+import kotlinx.datetime.TimeZone
 
 /**
  * The bookshelf: pick a repertoire, pick how you want to be tested.
@@ -50,6 +51,7 @@ fun HomeScreen(
     records: Map<String, TrainingRecord>?,
     health: StoreHealth,
     nowEpochMillis: Long,
+    timeZone: TimeZone,
     policy: MistakePolicy,
     oneSided: Boolean,
     fullTree: Boolean,
@@ -165,6 +167,7 @@ fun HomeScreen(
                 record = records?.get(tree.repertoire.id),
                 recordsLoaded = records != null,
                 nowEpochMillis = nowEpochMillis,
+                timeZone = timeZone,
                 onOpenGuided = { onOpenGuided(tree) },
                 onOpenBranch = { onOpenBranch(tree) },
             )
@@ -178,6 +181,7 @@ private fun RepertoireCard(
     record: TrainingRecord?,
     recordsLoaded: Boolean,
     nowEpochMillis: Long,
+    timeZone: TimeZone,
     onOpenGuided: () -> Unit,
     onOpenBranch: () -> Unit,
 ) {
@@ -232,7 +236,7 @@ private fun RepertoireCard(
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.secondary,
                 )
-                streakLabel(tree, record, nowEpochMillis)?.let { streaks ->
+                streakLabel(tree, record, nowEpochMillis, timeZone)?.let { streaks ->
                     Text(
                         text = streaks,
                         style = MaterialTheme.typography.bodyMedium,
@@ -277,10 +281,15 @@ private fun RepertoireCard(
  * The bragging line: day streaks and the proudest clean-recall streak. Only appears once
  * there is something worth saying — a streak of one is just Tuesday.
  */
-private fun streakLabel(tree: OpeningTree, record: TrainingRecord?, nowEpochMillis: Long): String? {
+private fun streakLabel(
+    tree: OpeningTree,
+    record: TrainingRecord?,
+    nowEpochMillis: Long,
+    timeZone: TimeZone,
+): String? {
     if (record == null) return null
     val parts = buildList {
-        val days = record.dayStreak(nowEpochMillis)
+        val days = record.dayStreak(nowEpochMillis, timeZone)
         if (days >= 2) add("$days days in a row")
         val best = tree.lines
             .map { line -> line.last() to record.reviewStreakOf(line.last().id) }

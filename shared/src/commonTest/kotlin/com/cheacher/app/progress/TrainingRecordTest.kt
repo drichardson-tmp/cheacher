@@ -1,10 +1,12 @@
 package com.cheacher.app.progress
 
 import com.cheacher.app.training.MistakePolicy
+import kotlinx.datetime.TimeZone
+import kotlinx.serialization.json.Json
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
-import kotlinx.serialization.json.Json
+import kotlin.time.Instant
 
 class TrainingRecordTest {
     @Test
@@ -168,10 +170,36 @@ class TrainingRecordTest {
             .recordSessionStart(2 * day + 5)
             .recordSessionStart(2 * day + 900) // two sessions in one day count once
             .recordSessionStart(3 * day + 5)
-        assertEquals(3, record.dayStreak(3 * day + 999), "practised today: streak runs through today")
-        assertEquals(3, record.dayStreak(4 * day + 5), "not yet practised today: yesterday's streak lives")
-        assertEquals(0, record.dayStreak(5 * day + 5), "a skipped day ends the streak")
-        assertEquals(0, TrainingRecord.empty("y").dayStreak(nowEpochMillis = 0L))
+        assertEquals(3, record.dayStreak(3 * day + 999, TimeZone.UTC), "practised today: streak runs through today")
+        assertEquals(3, record.dayStreak(4 * day + 5, TimeZone.UTC), "not yet practised today: yesterday's streak lives")
+        assertEquals(0, record.dayStreak(5 * day + 5, TimeZone.UTC), "a skipped day ends the streak")
+        assertEquals(0, TrainingRecord.empty("y").dayStreak(nowEpochMillis = 0L, TimeZone.UTC))
+    }
+
+    @Test
+    fun dayStreakUsesTheLearnersCalendarDays() {
+        val newYork = TimeZone.of("America/New_York")
+        val record = TrainingRecord.empty("x")
+            // Jan 1 at 8pm and Jan 2 at 6pm locally, but both are Jan 2 in UTC.
+            .recordSessionStart(Instant.parse("2026-01-02T01:00:00Z").toEpochMilliseconds())
+            .recordSessionStart(Instant.parse("2026-01-02T23:00:00Z").toEpochMilliseconds())
+        val jan3Morning = Instant.parse("2026-01-03T13:00:00Z").toEpochMilliseconds()
+
+        assertEquals(2, record.dayStreak(jan3Morning, newYork))
+        assertEquals(1, record.dayStreak(jan3Morning, TimeZone.UTC), "UTC collapses both local days")
+    }
+
+    @Test
+    fun dayStreakUsesTheZonesOffsetAtEachSession() {
+        val newYork = TimeZone.of("America/New_York")
+        val record = TrainingRecord.empty("x")
+            // Mar 7 at 11:30pm EST, shortly before the spring-forward transition.
+            .recordSessionStart(Instant.parse("2026-03-08T04:30:00Z").toEpochMilliseconds())
+            // Mar 8 at 6pm EDT, after the offset has changed from -05:00 to -04:00.
+            .recordSessionStart(Instant.parse("2026-03-08T22:00:00Z").toEpochMilliseconds())
+        val mar9Morning = Instant.parse("2026-03-09T13:00:00Z").toEpochMilliseconds()
+
+        assertEquals(2, record.dayStreak(mar9Morning, newYork))
     }
 
     @Test

@@ -1,8 +1,11 @@
 package com.cheacher.app.progress
 
 import com.cheacher.app.training.MistakePolicy
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toLocalDateTime
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlin.time.Instant
 
 /**
  * One line's review history, keyed by its leaf id in [TrainingRecord.lineReviews].
@@ -283,13 +286,13 @@ data class TrainingRecord(
      * Consecutive calendar days with at least one session, counting back from *now*.
      * Today does not have to be practised yet — a streak earned through yesterday is
      * still alive this morning, because a streak you lose while asleep is a scold, not
-     * an encouragement. Days are UTC buckets: honest enough for a habit counter, and it
-     * keeps the function pure (no timezone database in domain code).
+     * an encouragement. [timeZone] is explicit so the calculation remains pure while
+     * calendar days follow the learner across UTC boundaries and daylight-saving changes.
      */
-    fun dayStreak(nowEpochMillis: Long): Int {
+    fun dayStreak(nowEpochMillis: Long, timeZone: TimeZone): Int {
         if (sessionStarts.isEmpty()) return 0
-        val days = sessionStarts.map { it / DAY_MILLIS }.toSet()
-        val today = nowEpochMillis / DAY_MILLIS
+        val days = sessionStarts.map { it.localEpochDay(timeZone) }.toSet()
+        val today = nowEpochMillis.localEpochDay(timeZone)
         var cursor = when {
             today in days -> today
             (today - 1) in days -> today - 1
@@ -303,6 +306,9 @@ data class TrainingRecord(
         return streak
     }
 
+    private fun Long.localEpochDay(timeZone: TimeZone): Long =
+        Instant.fromEpochMilliseconds(this).toLocalDateTime(timeZone).date.toEpochDays()
+
     companion object {
         /** Miss attribution when the learner blunders before the first move of the tree. */
         const val ROOT_NODE_KEY = "root"
@@ -314,7 +320,7 @@ data class TrainingRecord(
          */
         const val DRILL_RECORD_ID = "__square_drill"
 
-        /** One day of epoch-millis — the unit of both the review ladder and day streaks. */
+        /** One day of epoch-millis — the unit of the review ladder. */
         const val DAY_MILLIS: Long = 24L * 60 * 60 * 1000
 
         fun empty(repertoireId: String): TrainingRecord = TrainingRecord(repertoireId)
