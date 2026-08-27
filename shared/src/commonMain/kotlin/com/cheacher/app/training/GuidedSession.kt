@@ -43,6 +43,19 @@ data class GuidedState(
      */
     val entryPly: Int = 0,
     /**
+     * Where the current line actually began. Unlike [entryPly], this can move deeper
+     * during the session after the learner reaches a named fork cleanly. Keeping the
+     * two values separate means the progress bar does not rewrite the work already
+     * done on the current line when a checkpoint is earned.
+     */
+    val lineStartPly: Int = entryPly,
+    /**
+     * Fork positions proved without a hint or miss during this session. Consecutive
+     * DFS lines resume from the deepest proved fork they share, then naturally fall
+     * back to an earlier fork when the traversal leaves a subgroup.
+     */
+    val earnedCheckpointIds: Set<String> = emptySet(),
+    /**
      * Length of the book's shared road in, whether or not it has been earned — the ply
      * the current walk has to reach cleanly to pay the toll. See [OpeningEntry].
      */
@@ -118,10 +131,10 @@ data class GuidedState(
         get() = GuidedProgress(
             lineNumber = (lineIndex + 1).coerceAtMost(lines.size),
             lineCount = lines.size,
-            // Measured from the entry, not from move one: the trunk is context on the
-            // move strip, and a bar that opens at 40% claims work that was not done here.
-            plyNumber = (plyIndex - entryPly).coerceAtLeast(0),
-            plyCount = (currentLine.size - entryPly).coerceAtLeast(0),
+            // Measured from this line's actual checkpoint, not move one: the prefix is
+            // context on the move strip, and a bar must not claim skipped work.
+            plyNumber = (plyIndex - lineStartPly).coerceAtLeast(0),
+            plyCount = (currentLine.size - lineStartPly).coerceAtLeast(0),
         )
 
     companion object {
@@ -140,12 +153,18 @@ data class GuidedState(
             val deal = lineIndices ?: tree.lines.indices.toList()
             val shortest = deal.minOfOrNull { tree.lines[it].size } ?: 0
             val entry = entryPly.coerceIn(0, (shortest - 1).coerceAtLeast(0))
+            val entryCheckpoint = deal.firstOrNull()
+                ?.let(tree.lines::get)
+                ?.getOrNull(entry - 1)
+                ?.id
             return GuidedState(
                 tree = tree,
                 lineIndices = lineIndices,
                 masteryLoop = masteryLoop,
                 passLines = deal,
                 entryPly = entry,
+                lineStartPly = entry,
+                earnedCheckpointIds = setOfNotNull(entryCheckpoint),
                 trunkPly = tree.trunk().size,
                 plyIndex = entry,
                 finished = deal.isEmpty(),
@@ -202,8 +221,17 @@ fun GuidedState.submit(move: Move): GuidedState {
 
     val nextPly = plyIndex + 1
     if (nextPly < currentLine.size) {
+        // The node just reached is the position from which its children fork. Prove
+        // that arrival unaided once and later lines in this subgroup need not charge
+        // the same preliminary moves again.
+        val checkpoints = if (target.children.size > 1 && !lineAided && !lineMissed) {
+            earnedCheckpointIds + target.id
+        } else {
+            earnedCheckpointIds
+        }
         return copy(
             plyIndex = nextPly,
+            earnedCheckpointIds = checkpoints,
             ideaRevealed = false,
             wrongAttempts = 0,
             lastEvent = GuidedEvent.Correct(target),
@@ -216,7 +244,6 @@ fun GuidedState.submit(move: Move): GuidedState {
     val credit = currentLineCredit
     val banked = lineCredits + (passLines[lineIndex] to credit)
     val walkedNext = copy(
-        plyIndex = entryPly,
         ideaRevealed = false,
         wrongAttempts = 0,
         lineAided = false,
@@ -225,13 +252,28 @@ fun GuidedState.submit(move: Move): GuidedState {
         lastEvent = GuidedEvent.LineComplete(finishedLine, credit),
     )
 
-    if (lineIndex + 1 < lines.size) return walkedNext.copy(lineIndex = lineIndex + 1)
+    if (lineIndex + 1 < lines.size) {
+        val nextLineIndex = lineIndex + 1
+        val start = walkedNext.resumePlyFor(lines[nextLineIndex])
+        return walkedNext.copy(
+            lineIndex = nextLineIndex,
+            lineStartPly = start,
+            plyIndex = start,
+        )
+    }
 
     // End of the pass. The loop re-deals every line still short of a clean walk; the
     // re-dealt walk starts fresh, so the next pass is the clean shot.
     val retry = if (masteryLoop) deal.filter { (banked[it] ?: 0.0) < 1.0 } else emptyList()
     return if (retry.isNotEmpty()) {
-        walkedNext.copy(passLines = retry, lineIndex = 0)
+        val retryLine = tree.lines[retry.first()]
+        val start = walkedNext.resumePlyFor(retryLine)
+        walkedNext.copy(
+            passLines = retry,
+            lineIndex = 0,
+            lineStartPly = start,
+            plyIndex = start,
+        )
     } else {
         walkedNext.copy(
             plyIndex = nextPly,
@@ -253,11 +295,20 @@ fun GuidedState.revealIdea(): GuidedState = copy(ideaRevealed = true, lineAided 
  * a clean replay of the line.
  */
 fun GuidedState.restartLine(): GuidedState =
-    copy(
-        plyIndex = entryPly,
-        ideaRevealed = false,
-        wrongAttempts = 0,
-        lineAided = false,
-        lineMissed = false,
-        lastEvent = null,
-    )
+    resumePlyFor(currentLine).let { start ->
+        copy(
+            lineStartPly = start,
+            plyIndex = start,
+            ideaRevealed = false,
+            wrongAttempts = 0,
+            lineAided = false,
+            lineMissed = false,
+            lastEvent = null,
+        )
+    }
+
+/** Deepest earned checkpoint on [line], always leaving at least one move to answer. */
+private fun GuidedState.resumePlyFor(line: List<TreeNode>): Int {
+    val checkpointIndex = line.dropLast(1).indexOfLast { it.id in earnedCheckpointIds }
+    return if (checkpointIndex >= 0) checkpointIndex + 1 else 0
+}

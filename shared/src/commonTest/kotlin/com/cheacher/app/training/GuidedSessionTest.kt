@@ -64,7 +64,7 @@ class GuidedSessionTest {
     }
 
     @Test
-    fun finishingALineLoadsTheNextAndResetsTheBoard() {
+    fun finishingALineLoadsTheNextAtTheCleanSharedFork() {
         val state = GuidedState.start(tree)
             .submit(move("e2e4"))
             .submit(move("e7e5"))
@@ -72,15 +72,15 @@ class GuidedSessionTest {
         val event = assertIs<GuidedEvent.LineComplete>(state.lastEvent)
         assertEquals(listOf("0", "0.0", "0.0.0"), event.line.map { it.id })
         assertEquals(1, state.lineIndex)
-        assertEquals(0, state.plyIndex)
-        assertEquals(tree.root, state.position, "the next line starts from the root again")
-        assertEquals("King's Pawn Opening", state.prompt?.name)
+        assertEquals(1, state.plyIndex)
+        assertEquals(tree.node("0")?.position, state.position, "the next line resumes at 1.e4")
+        assertEquals("Sicilian Defence", state.prompt?.name)
     }
 
     @Test
     fun finishingTheLastLineFinishesTheSession() {
         var state = GuidedState.start(tree)
-        for (uci in listOf("e2e4", "e7e5", "g1f3", "e2e4", "c7c5", "g1f3")) {
+        for (uci in listOf("e2e4", "e7e5", "g1f3", "c7c5", "g1f3")) {
             state = state.submit(move(uci))
         }
         assertTrue(state.finished)
@@ -89,17 +89,18 @@ class GuidedSessionTest {
     }
 
     @Test
-    fun restartLineDropsBackToTheLineStart() {
+    fun restartLineDropsBackToTheDeepestEarnedCheckpoint() {
         val state = GuidedState.start(tree)
             .submit(move("e2e4"))
             .submit(move("d2d4")) // miss mid-line
             .restartLine()
-        assertEquals(0, state.plyIndex)
+        assertEquals(1, state.plyIndex)
         assertFalse(state.ideaRevealed)
         assertFalse(state.lineAided)
         assertFalse(state.lineMissed)
         assertEquals(1.0, state.currentLineCredit)
-        assertEquals(tree.root, state.position)
+        assertEquals(tree.node("0")?.position, state.position)
+        assertEquals("Open Game", state.prompt?.name)
         assertNull(state.lastEvent)
     }
 
@@ -177,10 +178,10 @@ class GuidedSessionTest {
         for (uci in listOf("e2e4", "c7c5", "g1f3")) state = state.submit(move(uci)) // clean: 1
         assertFalse(state.finished, "a half-known line is not accounted for")
         assertEquals(listOf(0), state.passLines, "only the imperfect line is re-dealt")
-        assertEquals("King's Pawn Opening", state.prompt?.name)
+        assertEquals("Open Game", state.prompt?.name, "the clean second line proved the shared fork")
 
         // The re-dealt walk starts fresh — this is the clean shot.
-        for (uci in listOf("e2e4", "e7e5", "g1f3")) state = state.submit(move(uci))
+        for (uci in listOf("e7e5", "g1f3")) state = state.submit(move(uci))
         assertTrue(state.finished)
         assertTrue(state.allClean)
         assertEquals(2.0, state.sessionScore)
