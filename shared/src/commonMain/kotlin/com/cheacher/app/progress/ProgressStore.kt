@@ -5,6 +5,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
+import com.cheacher.app.training.MistakePolicy
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -33,6 +34,12 @@ data class StoreHealth(
 data class AppSettings(
     /** Tactile move feedback is welcoming by default and can be silenced from the shelf. */
     val hapticsEnabled: Boolean = true,
+    /** One miss ends a branch unless the learner has explicitly chosen an allowance. */
+    val mistakePolicy: MistakePolicy = MistakePolicy.STRICT,
+    /** When true, Cheacher supplies the opponent's replies during branch recall. */
+    val oneSided: Boolean = false,
+    /** Whether the shelf opens every authored line instead of following the coach's gate. */
+    val fullTree: Boolean = false,
 )
 
 /**
@@ -103,9 +110,7 @@ class DataStoreProgressStore(
             StoreHealth(unreadableRecords = broken, lastWriteFailed = failed)
         }
 
-    override val settings: Flow<AppSettings> = dataStore.data.map { preferences ->
-        AppSettings(hapticsEnabled = preferences[HAPTICS_ENABLED] ?: true)
-    }
+    override val settings: Flow<AppSettings> = dataStore.data.map(::settingsFrom)
 
     override suspend fun update(repertoireId: String, transform: (TrainingRecord) -> TrainingRecord) {
         try {
@@ -147,10 +152,23 @@ class DataStoreProgressStore(
 
     private suspend fun editSettings(transform: (AppSettings) -> AppSettings) {
         dataStore.edit { preferences ->
-            val current = AppSettings(hapticsEnabled = preferences[HAPTICS_ENABLED] ?: true)
-            preferences[HAPTICS_ENABLED] = transform(current).hapticsEnabled
+            val updated = transform(settingsFrom(preferences))
+            preferences[HAPTICS_ENABLED] = updated.hapticsEnabled
+            preferences[MISTAKE_POLICY] = updated.mistakePolicy.name
+            preferences[ONE_SIDED] = updated.oneSided
+            preferences[FULL_TREE] = updated.fullTree
         }
     }
+
+    private fun settingsFrom(preferences: Preferences): AppSettings =
+        AppSettings(
+            hapticsEnabled = preferences[HAPTICS_ENABLED] ?: true,
+            mistakePolicy = preferences[MISTAKE_POLICY]
+                ?.let { stored -> MistakePolicy.entries.firstOrNull { it.name == stored } }
+                ?: MistakePolicy.STRICT,
+            oneSided = preferences[ONE_SIDED] ?: false,
+            fullTree = preferences[FULL_TREE] ?: false,
+        )
 
     private suspend fun editRecord(repertoireId: String, transform: (TrainingRecord) -> TrainingRecord) {
         val key = stringPreferencesKey(RECORD_PREFIX + repertoireId)
@@ -172,6 +190,9 @@ class DataStoreProgressStore(
         const val RECORD_PREFIX = "record."
         const val QUARANTINE_PREFIX = "corrupt."
         val HAPTICS_ENABLED = booleanPreferencesKey("settings.haptics_enabled")
+        val MISTAKE_POLICY = stringPreferencesKey("settings.mistake_policy")
+        val ONE_SIDED = booleanPreferencesKey("settings.one_sided")
+        val FULL_TREE = booleanPreferencesKey("settings.full_tree")
     }
 }
 
