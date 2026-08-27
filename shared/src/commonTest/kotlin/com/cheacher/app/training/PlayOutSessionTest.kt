@@ -29,10 +29,10 @@ class PlayOutSessionTest {
 
     @Test
     fun startCarriesTheBookLineAndItsFinalPosition() {
-        val state = PlayOutState.start(tree, "0.0.0")
+        val state = PlayOutState.start(tree, "e2e4/e7e5/g1f3")
         assertEquals(Color.WHITE, state.learnerSide)
         assertEquals(listOf("e4", "e5", "Nf3"), state.bookMoves.map { it.san })
-        assertEquals(tree.node("0.0.0")!!.position, state.position)
+        assertEquals(tree.node("e2e4/e7e5/g1f3")!!.position, state.position)
         assertEquals(Color.BLACK, state.position.sideToMove)
         assertTrue(state.isEngineTurn, "book ended on the learner's move; the engine is up")
         assertNull(state.outcome)
@@ -40,19 +40,19 @@ class PlayOutSessionTest {
 
     @Test
     fun startRejectsANodeThatIsNotALeaf() {
-        val failure = runCatching { PlayOutState.start(tree, "0.0") }
+        val failure = runCatching { PlayOutState.start(tree, "e2e4/e7e5") }
         assertTrue(failure.isFailure)
     }
 
     @Test
     fun illegalMovesLeaveTheStateUntouched() {
-        val state = PlayOutState.start(tree, "0.0.0")
+        val state = PlayOutState.start(tree, "e2e4/e7e5/g1f3")
         assertSame(state, state.play(move("e2e4")))
     }
 
     @Test
     fun legalMovesAppendToTheFreshStrip() {
-        val state = PlayOutState.start(tree, "0.0.0").play(move("b8c6"))
+        val state = PlayOutState.start(tree, "e2e4/e7e5/g1f3").play(move("b8c6"))
         assertEquals(listOf("Nc6"), state.freshMoves.map { it.san })
         assertEquals(3, state.bookMoves.size)
         assertEquals(move("b8c6"), state.lastMove)
@@ -109,7 +109,7 @@ class PlayOutSessionTest {
 
     @Test
     fun resignationLosesAndFreezesTheGame() {
-        val resigned = PlayOutState.start(tree, "0.0.0").resign()
+        val resigned = PlayOutState.start(tree, "e2e4/e7e5/g1f3").resign()
         assertEquals(PlayOutOutcome(GameResult.ENGINE_WIN, EndReason.RESIGNATION), resigned.outcome)
         assertSame(resigned, resigned.play(move("b8c6")), "a finished game takes no moves")
         assertSame(resigned, resigned.resign())

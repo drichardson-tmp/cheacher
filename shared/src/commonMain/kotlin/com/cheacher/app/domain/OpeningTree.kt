@@ -50,9 +50,10 @@ class OpeningTree private constructor(
         fun resolve(repertoire: Repertoire): OpeningTree {
             val root = Fen.parseOrNull(repertoire.startFen)
                 ?: throw RepertoireFormatException("repertoire '${repertoire.id}' has an invalid start FEN")
-            val children = repertoire.moves.mapIndexed { index, move ->
-                resolveNode(repertoire, move, root, parentId = null, index = index, depth = 0)
+            val children = repertoire.moves.map { move ->
+                resolveNode(repertoire, move, root, parentId = null, depth = 0)
             }
+            requireUniqueIds(repertoire, children)
             return OpeningTree(repertoire, root, children)
         }
 
@@ -61,17 +62,18 @@ class OpeningTree private constructor(
             authored: RepertoireMove,
             before: Position,
             parentId: String?,
-            index: Int,
             depth: Int,
         ): TreeNode {
             val move = before.moveFromSan(authored.san)
                 ?: throw RepertoireFormatException(
                     "repertoire '${repertoire.id}': '${authored.san}' is not legal in ${Fen.format(before)}",
                 )
-            val id = if (parentId == null) "$index" else "$parentId.$index"
+            // A move path names the chess that happened, not where the author happened
+            // to place it in a list. Editing a sibling must never move persisted history.
+            val id = listOfNotNull(parentId, move.uci).joinToString(NODE_ID_SEPARATOR)
             val after = before.applyUnchecked(move)
-            val children = authored.children.mapIndexed { childIndex, child ->
-                resolveNode(repertoire, child, after, parentId = id, index = childIndex, depth = depth + 1)
+            val children = authored.children.map { child ->
+                resolveNode(repertoire, child, after, parentId = id, depth = depth + 1)
             }
             return TreeNode(
                 id = id,
@@ -88,6 +90,23 @@ class OpeningTree private constructor(
             )
         }
 
+        private fun requireUniqueIds(repertoire: Repertoire, roots: List<TreeNode>) {
+            val seen = mutableSetOf<String>()
+
+            fun visit(node: TreeNode) {
+                if (!seen.add(node.id)) {
+                    throw RepertoireFormatException(
+                        "repertoire '${repertoire.id}' authors the move path '${node.id}' more than once",
+                    )
+                }
+                node.children.forEach(::visit)
+            }
+
+            roots.forEach(::visit)
+        }
+
+        private const val NODE_ID_SEPARATOR = "/"
+
         private fun collectDepthFirst(node: TreeNode, into: MutableList<TreeNode>) {
             into += node
             node.children.forEach { collectDepthFirst(it, into) }
@@ -102,6 +121,7 @@ class OpeningTree private constructor(
 
 /** One authored move, resolved. Immutable and safe to hold in Compose state. */
 data class TreeNode(
+    /** Stable UCI move path from the repertoire root, independent of authored sibling order. */
     val id: String,
     val parentId: String?,
     val move: Move,

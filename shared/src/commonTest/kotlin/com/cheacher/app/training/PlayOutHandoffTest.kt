@@ -24,7 +24,7 @@ class PlayOutHandoffTest {
         }
         assertTrue(state.finished)
         val leafId = state.currentLine.last().id
-        assertEquals("0.1.0", leafId, "the last walked line, not the first")
+        assertEquals("e2e4/c7c5/g1f3", leafId, "the last walked line, not the first")
 
         val playOut = PlayOutState.start(tree, leafId)
         assertEquals(state.currentLine.last().position, playOut.position)
@@ -38,6 +38,6 @@ class PlayOutHandoffTest {
             state = state.submit(move(uci))
         }
         assertTrue(state.finished)
-        assertEquals("0.0.0", state.currentLine.last().id)
+        assertEquals("e2e4/e7e5/g1f3", state.currentLine.last().id)
     }
 }
