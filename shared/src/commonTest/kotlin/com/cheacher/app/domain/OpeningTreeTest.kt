@@ -22,32 +22,76 @@ internal fun tinyRepertoire(): Repertoire = repertoire("tiny", "Tiny", Color.WHI
 
 class OpeningTreeTest {
     @Test
-    fun idsFollowAuthoredIndices() {
+    fun idsFollowCanonicalMovePaths() {
         val tree = OpeningTree.resolve(tinyRepertoire())
-        assertEquals(listOf("0", "0.0", "0.0.0", "0.1", "0.1.0"), tree.allNodes.map { it.id })
-        assertEquals("0", tree.node("0.1")?.parentId)
-        assertNull(tree.node("7.7"))
+        assertEquals(
+            listOf(
+                "e2e4",
+                "e2e4/e7e5",
+                "e2e4/e7e5/g1f3",
+                "e2e4/c7c5",
+                "e2e4/c7c5/g1f3",
+            ),
+            tree.allNodes.map { it.id },
+        )
+        assertEquals("e2e4", tree.node("e2e4/c7c5")?.parentId)
+        assertNull(tree.node("e2e4/d7d5"))
     }
 
     @Test
     fun linesAreRootToLeafPaths() {
         val tree = OpeningTree.resolve(tinyRepertoire())
         assertEquals(2, tree.lines.size)
-        assertEquals(listOf("0", "0.0", "0.0.0"), tree.lines[0].map { it.id })
-        assertEquals(listOf("0", "0.1", "0.1.0"), tree.lines[1].map { it.id })
+        assertEquals(listOf("e2e4", "e2e4/e7e5", "e2e4/e7e5/g1f3"), tree.lines[0].map { it.id })
+        assertEquals(listOf("e2e4", "e2e4/c7c5", "e2e4/c7c5/g1f3"), tree.lines[1].map { it.id })
     }
 
     @Test
     fun positionsAreAttachedAndConsistent() {
         val tree = OpeningTree.resolve(tinyRepertoire())
-        val sicilian = assertNotNull(tree.node("0.1"))
+        val sicilian = assertNotNull(tree.node("e2e4/c7c5"))
         assertEquals(Color.WHITE, tree.sideToMoveAt(sicilian))
         assertEquals(
             "rnbqkbnr/pp1ppppp/8/2p5/4P3/8/PPPP1PPP/RNBQKBNR w KQkq c6 0 2",
             Fen.format(sicilian.position),
         )
-        assertEquals(sicilian.positionBefore, assertNotNull(tree.node("0")).position)
+        assertEquals(sicilian.positionBefore, assertNotNull(tree.node("e2e4")).position)
         assertEquals("1...c5", sicilian.toString())
+    }
+
+    @Test
+    fun idsSurviveSiblingInsertionAndReordering() {
+        val edited = repertoire("tiny", "Tiny", Color.WHITE) {
+            move("e4", "King's Pawn Opening") {
+                move("d6", "Modern Defence")
+                move("c5", "Sicilian Defence") { move("Nf3", "Open Sicilian, Preparation") }
+                move("e5", "Open Game") { move("Nf3", "King's Knight Opening") }
+            }
+        }
+        val before = OpeningTree.resolve(tinyRepertoire())
+        val after = OpeningTree.resolve(edited)
+
+        val originalIds = listOf(
+            "e2e4",
+            "e2e4/e7e5",
+            "e2e4/e7e5/g1f3",
+            "e2e4/c7c5",
+            "e2e4/c7c5/g1f3",
+        )
+        for (id in originalIds) {
+            assertNotNull(before.node(id))
+            assertNotNull(after.node(id), "$id changed when a sibling moved")
+        }
+    }
+
+    @Test
+    fun duplicateMovePathsFailAtResolveTime() {
+        val duplicate = repertoire("duplicate", "Duplicate", Color.WHITE) {
+            move("e4", "First copy")
+            move("e4", "Second copy")
+        }
+        val failure = assertFailsWith<RepertoireFormatException> { OpeningTree.resolve(duplicate) }
+        assertEquals(true, failure.message?.contains("move path 'e2e4' more than once"))
     }
 
     @Test

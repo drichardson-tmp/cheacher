@@ -56,7 +56,7 @@ class SampleRepertoiresTest {
     @Test
     fun sicilianBranchesIntoOpenAndClosed() {
         val tree = OpeningTree.resolve(SampleRepertoires.sicilianCrossroads)
-        val afterC5 = tree.node("0.0") ?: error("missing 1...c5")
+        val afterC5 = tree.node("e2e4/c7c5") ?: error("missing 1...c5")
         assertEquals("Sicilian Defence", afterC5.name)
         assertEquals(
             listOf("Nf3", "Nc3"),

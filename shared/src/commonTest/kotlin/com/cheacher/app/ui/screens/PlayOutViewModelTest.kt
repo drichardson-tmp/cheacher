@@ -31,7 +31,7 @@ class PlayOutViewModelTest {
     @Test
     fun engineOpensTheGameWhenTheBookEndsOnTheLearnersMove() = runTest {
         val journal = RecordingJournal()
-        val vm = PlayOutViewModel(tree, "0.0.0", 700, this, journal.journal)
+        val vm = PlayOutViewModel(tree, "e2e4/e7e5/g1f3", 700, this, journal.journal)
         // The tiny book's line ends on White's 2.Nf3, so Black — the engine — is up.
         val state = vm.state.first { it.freshMoves.isNotEmpty() }
         assertEquals(Color.BLACK, state.freshMoves.single().mover)
@@ -42,7 +42,7 @@ class PlayOutViewModelTest {
     @Test
     fun learnerMovesDrawAnEngineReply() = runTest {
         val journal = RecordingJournal()
-        val vm = PlayOutViewModel(tree, "0.0.0", 700, this, journal.journal)
+        val vm = PlayOutViewModel(tree, "e2e4/e7e5/g1f3", 700, this, journal.journal)
         val opened = vm.state.first { it.isLearnerTurn }
 
         vm.onMove(opened.position.legalMoves().first())
@@ -58,7 +58,7 @@ class PlayOutViewModelTest {
     @Test
     fun movesAreIgnoredWhileTheEngineIsOnTheMove() = runTest {
         val journal = RecordingJournal()
-        val vm = PlayOutViewModel(tree, "0.0.0", 700, this, journal.journal)
+        val vm = PlayOutViewModel(tree, "e2e4/e7e5/g1f3", 700, this, journal.journal)
         // The engine's opening think has not run yet — it is Black's move, and any
         // learner input must bounce.
         val before = vm.state.value
@@ -71,7 +71,7 @@ class PlayOutViewModelTest {
     @Test
     fun resigningJournalsExactlyOneGameAndSwallowsThePendingEngineMove() = runTest {
         val journal = RecordingJournal()
-        val vm = PlayOutViewModel(tree, "0.0.0", 700, this, journal.journal)
+        val vm = PlayOutViewModel(tree, "e2e4/e7e5/g1f3", 700, this, journal.journal)
 
         vm.resign() // before the engine's queued think ever runs
         vm.resign() // a second tap must not double-book
@@ -92,7 +92,7 @@ class PlayOutViewModelTest {
     @Test
     fun rematchRearmsTheBoardAndTheJournal() = runTest {
         val journal = RecordingJournal()
-        val vm = PlayOutViewModel(tree, "0.0.0", 700, this, journal.journal)
+        val vm = PlayOutViewModel(tree, "e2e4/e7e5/g1f3", 700, this, journal.journal)
         vm.resign()
 
         vm.rematch()

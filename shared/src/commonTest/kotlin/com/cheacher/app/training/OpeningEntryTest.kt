@@ -66,7 +66,7 @@ class OpeningEntryTest {
 
     @Test
     fun trunkIsTheSharedRoadIn() {
-        assertEquals(listOf("0"), tiny.trunk().map { it.id }, "both tiny lines share only 1.e4")
+        assertEquals(listOf("e2e4"), tiny.trunk().map { it.id }, "both tiny lines share only 1.e4")
         assertEquals(
             listOf("e4", "e5", "Nf3", "Nc6", "Bc4"),
             italian.trunk().map { it.san },
@@ -104,7 +104,7 @@ class OpeningEntryTest {
         assertTrue(entry.proven)
         assertEquals(5, entry.entryPly)
         assertEquals("Italian Game", entry.entryName)
-        assertEquals("0.0.0.0.0", assertNotNull(entry.entryNode).id)
+        assertEquals("e2e4/e7e5/g1f3/b8c6/f1c4", assertNotNull(entry.entryNode).id)
     }
 
     @Test
@@ -122,7 +122,7 @@ class OpeningEntryTest {
     fun guidedOpensAtTheEntryAndScoresFromThere() {
         val state = GuidedState.start(italian, entryPly = 5)
         assertEquals("Giuoco Piano", state.prompt?.name, "the first ask is the fork, not 1.e4")
-        assertEquals(italian.node("0.0.0.0.0")?.position, state.position)
+        assertEquals(italian.node("e2e4/e7e5/g1f3/b8c6/f1c4")?.position, state.position)
         assertEquals(5, state.played.size, "the road in is context on the move strip")
         assertEquals(0, state.progress.plyNumber, "no work claimed for moves that were skipped")
         assertEquals(2, state.progress.plyCount)
@@ -207,12 +207,12 @@ class OpeningEntryTest {
 
     @Test
     fun branchOpensAtTheEntryWithTheRoadInAlreadyTravelled() {
-        val state = BranchState.start(italian, entryNodeId = "0.0.0.0.0")
-        assertEquals("0.0.0.0.0", state.cursorId)
+        val state = BranchState.start(italian, entryNodeId = "e2e4/e7e5/g1f3/b8c6/f1c4")
+        assertEquals("e2e4/e7e5/g1f3/b8c6/f1c4", state.cursorId)
         assertEquals(5, state.path.size)
         assertEquals(
             NodeStatus.IN_PROGRESS,
-            state.statusOf(assertNotNull(italian.node("0"))),
+            state.statusOf(assertNotNull(italian.node("e2e4"))),
             "1.e4 reads as history, not as something still to find",
         )
         assertEquals(italian.lines[0].last().id, state.targetLeaf?.id, "line one is still the ask")
@@ -221,13 +221,13 @@ class OpeningEntryTest {
 
     @Test
     fun branchNeverReelsBackPastTheEntry() {
-        val closed = BranchState.start(italian, entryNodeId = "0.0.0.0.0")
+        val closed = BranchState.start(italian, entryNodeId = "e2e4/e7e5/g1f3/b8c6/f1c4")
             .submit(move("f8c5"))
             .submit(move("c2c3"))
         val event = assertIs<BranchEvent.BranchClosed>(closed.lastEvent)
-        assertEquals("0.0.0.0.0", event.snappedTo?.id, "the snap stops at the Italian")
-        assertEquals("0.0.0.0.0", closed.cursorId)
-        assertEquals("0.0.0.0.0", closed.backToJunction().cursorId)
+        assertEquals("e2e4/e7e5/g1f3/b8c6/f1c4", event.snappedTo?.id, "the snap stops at the Italian")
+        assertEquals("e2e4/e7e5/g1f3/b8c6/f1c4", closed.cursorId)
+        assertEquals("e2e4/e7e5/g1f3/b8c6/f1c4", closed.backToJunction().cursorId)
 
         val done = closed.submit(move("g8f6")).submit(move("f3g5"))
         assertIs<BranchEvent.SessionComplete>(done.lastEvent)
@@ -240,8 +240,8 @@ class OpeningEntryTest {
         // A progression gate that has not unlocked the trunk cannot be skipped past.
         val gated = BranchState.start(
             italian,
-            allowedNodeIds = setOf("0.1"),
-            entryNodeId = "0.0.0.0.0",
+            allowedNodeIds = setOf("e2e4/c7c5"),
+            entryNodeId = "e2e4/e7e5/g1f3/b8c6/f1c4",
         )
         assertNull(gated.cursorId, "an unearned road in is no road in")
         assertNull(gated.entryNodeId)
@@ -286,7 +286,7 @@ class OpeningEntryTest {
             },
         )
         val entry = OpeningEntry(unnamed, TrainingRecord.empty("unnamed").recordTrunkCleared())
-        assertEquals("0", assertNotNull(entry.entryNode).id)
+        assertEquals("e2e4", assertNotNull(entry.entryNode).id)
         assertNull(entry.entryName, "a blank name is not a name")
     }
 
@@ -338,15 +338,15 @@ class OpeningEntryTest {
         val state = BranchState.start(
             italian,
             autoReplyFor = Color.BLACK,
-            entryNodeId = "0.0.0.0.0",
+            entryNodeId = "e2e4/e7e5/g1f3/b8c6/f1c4",
         )
-        assertEquals("0.0.0.0.0.0", state.cursorId, "the app answers 3.Bc4 with 3...Bc5")
+        assertEquals("e2e4/e7e5/g1f3/b8c6/f1c4/f8c5", state.cursorId, "the app answers 3.Bc4 with 3...Bc5")
         assertEquals(Color.WHITE, italian.sideToMoveAt(state.cursor))
 
         val closed = state.submit(move("c2c3"))
         assertIs<BranchEvent.BranchClosed>(closed.lastEvent)
         assertEquals(
-            "0.0.0.0.0.1",
+            "e2e4/e7e5/g1f3/b8c6/f1c4/g8f6",
             closed.cursorId,
             "the snap lands on the entry and the app deals the next line's reply",
         )
@@ -354,11 +354,11 @@ class OpeningEntryTest {
 
     @Test
     fun aMissFromTheEntryIsChargedToTheEntryNotToTheRoot() {
-        val missed = BranchState.start(italian, entryNodeId = "0.0.0.0.0")
+        val missed = BranchState.start(italian, entryNodeId = "e2e4/e7e5/g1f3/b8c6/f1c4")
             .submit(move("g8h6")) // legal, and nowhere in the book
         val event = assertIs<BranchEvent.BranchFailed>(missed.lastEvent)
-        assertEquals("0.0.0.0.0", event.at?.id, "the trouble map blames the Italian, not 'root'")
-        assertEquals("0.0.0.0.0", event.snappedTo?.id)
+        assertEquals("e2e4/e7e5/g1f3/b8c6/f1c4", event.at?.id, "the trouble map blames the Italian, not 'root'")
+        assertEquals("e2e4/e7e5/g1f3/b8c6/f1c4", event.snappedTo?.id)
         assertEquals(NodeStatus.FAILED, missed.statusOf(italian.lines[0].last()))
         assertEquals(italian.lines[1].last().id, missed.targetLeaf?.id, "the ask moves to line two")
     }
@@ -368,11 +368,11 @@ class OpeningEntryTest {
         val missed = BranchState.start(
             italian,
             policy = MistakePolicy.ONE_ALLOWANCE,
-            entryNodeId = "0.0.0.0.0",
+            entryNodeId = "e2e4/e7e5/g1f3/b8c6/f1c4",
         ).submit(move("g8h6"))
         val event = assertIs<BranchEvent.Missed>(missed.lastEvent)
         assertEquals(1, event.strikes)
-        assertEquals("0.0.0.0.0", missed.cursorId, "a forgiven miss does not move the board")
+        assertEquals("e2e4/e7e5/g1f3/b8c6/f1c4", missed.cursorId, "a forgiven miss does not move the board")
         assertEquals(2, missed.progress.totalLines)
     }
 
@@ -381,20 +381,20 @@ class OpeningEntryTest {
         val state = BranchState.start(
             italian,
             allowedNodeIds = italian.lines[0].map { it.id }.toSet(),
-            entryNodeId = "0.0.0.0.0",
+            entryNodeId = "e2e4/e7e5/g1f3/b8c6/f1c4",
         )
-        assertEquals("0.0.0.0.0", state.cursorId, "the trunk is unlocked, so the entry holds")
+        assertEquals("e2e4/e7e5/g1f3/b8c6/f1c4", state.cursorId, "the trunk is unlocked, so the entry holds")
         assertEquals(1, state.progress.totalLines, "a locked line is off the scoreboard")
 
         val rattled = state.submit(move("g8f6"))
         assertIs<BranchEvent.Locked>(rattled.lastEvent)
-        assertEquals("0.0.0.0.0", rattled.cursorId)
+        assertEquals("e2e4/e7e5/g1f3/b8c6/f1c4", rattled.cursorId)
         assertEquals(0, rattled.strikes, "a locked door costs nothing")
     }
 
     @Test
     fun anEntryPastTheForkIsNotAnEntry() {
-        val state = BranchState.start(italian, entryNodeId = "0.0.0.0.0.0")
+        val state = BranchState.start(italian, entryNodeId = "e2e4/e7e5/g1f3/b8c6/f1c4/f8c5")
         assertNull(state.entryNodeId, "only the shared road may be skipped")
         assertNull(state.cursorId)
     }
@@ -413,7 +413,7 @@ class OpeningEntryTest {
             .submit(move("f8c5"))
             .submit(move("c2c3"))
         val event = assertIs<BranchEvent.BranchClosed>(closed.lastEvent)
-        assertEquals("0.0.0.0.0", event.snappedTo?.id, "the fork is still the nearest open junction")
+        assertEquals("e2e4/e7e5/g1f3/b8c6/f1c4", event.snappedTo?.id, "the fork is still the nearest open junction")
     }
 
     @Test
@@ -477,7 +477,7 @@ class OpeningEntryTest {
     @Test
     fun blindRecallPaysTheTollOnArrivalAsWell() {
         var state = BranchState.start(italian)
-        assertEquals("0.0.0.0.0", state.trunkLastId)
+        assertEquals("e2e4/e7e5/g1f3/b8c6/f1c4", state.trunkLastId)
         listOf("e2e4", "e7e5", "g1f3", "b8c6").forEach { state = state.submit(move(it)) }
         assertFalse(state.roadInCleared)
 
@@ -532,7 +532,7 @@ class OpeningEntryTest {
 
     @Test
     fun theRoadInIsNotWalkedAtAllOnceItIsEarned() {
-        val state = BranchState.start(italian, entryNodeId = "0.0.0.0.0")
+        val state = BranchState.start(italian, entryNodeId = "e2e4/e7e5/g1f3/b8c6/f1c4")
         assertFalse(state.roadInCleared, "nothing to prove — the round opens past it")
         assertFalse(state.roadInFumbled)
     }
@@ -541,13 +541,13 @@ class OpeningEntryTest {
     fun theRoadInAskIsOnlyForMovesBeforeTheFork() {
         assertTrue(italian.isReachingForRoadIn(null), "the very first move is the way in")
         assertTrue(italian.isReachingForRoadIn(TrainingRecord.ROOT_NODE_KEY))
-        assertTrue(italian.isReachingForRoadIn("0.0.0.0"), "3.Bc4 is still the way in")
+        assertTrue(italian.isReachingForRoadIn("e2e4/e7e5/g1f3/b8c6"), "3.Bc4 is still the way in")
         assertFalse(
-            italian.isReachingForRoadIn("0.0.0.0.0"),
+            italian.isReachingForRoadIn("e2e4/e7e5/g1f3/b8c6/f1c4"),
             "standing on the Italian bishop, the next move is the opening itself",
         )
-        assertFalse(italian.isReachingForRoadIn("0.0.0.0.0.0"))
-        assertFalse(tiny.isReachingForRoadIn("0"), "tiny forks straight after 1.e4")
-        assertEquals(setOf("0"), tiny.trunkNodeIds())
+        assertFalse(italian.isReachingForRoadIn("e2e4/e7e5/g1f3/b8c6/f1c4/f8c5"))
+        assertFalse(tiny.isReachingForRoadIn("e2e4"), "tiny forks straight after 1.e4")
+        assertEquals(setOf("e2e4"), tiny.trunkNodeIds())
     }
 }

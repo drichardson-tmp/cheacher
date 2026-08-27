@@ -70,10 +70,10 @@ class GuidedSessionTest {
             .submit(move("e7e5"))
             .submit(move("g1f3"))
         val event = assertIs<GuidedEvent.LineComplete>(state.lastEvent)
-        assertEquals(listOf("0", "0.0", "0.0.0"), event.line.map { it.id })
+        assertEquals(listOf("e2e4", "e2e4/e7e5", "e2e4/e7e5/g1f3"), event.line.map { it.id })
         assertEquals(1, state.lineIndex)
         assertEquals(1, state.plyIndex)
-        assertEquals(tree.node("0")?.position, state.position, "the next line resumes at 1.e4")
+        assertEquals(tree.node("e2e4")?.position, state.position, "the next line resumes at 1.e4")
         assertEquals("Sicilian Defence", state.prompt?.name)
     }
 
@@ -99,7 +99,7 @@ class GuidedSessionTest {
         assertFalse(state.lineAided)
         assertFalse(state.lineMissed)
         assertEquals(1.0, state.currentLineCredit)
-        assertEquals(tree.node("0")?.position, state.position)
+        assertEquals(tree.node("e2e4")?.position, state.position)
         assertEquals("Open Game", state.prompt?.name)
         assertNull(state.lastEvent)
     }
@@ -126,7 +126,7 @@ class GuidedSessionTest {
             state = state.submit(move(uci))
         }
         assertTrue(state.finished)
-        assertEquals(listOf("0", "0.0", "0.0.0"), prompted, "no node of line 1 was ever expected")
+        assertEquals(listOf("e2e4", "e2e4/e7e5", "e2e4/e7e5/g1f3"), prompted, "no node of line 1 was ever expected")
     }
 
     @Test

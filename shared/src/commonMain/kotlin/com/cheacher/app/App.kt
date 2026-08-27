@@ -25,12 +25,13 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.cheacher.app.data.SampleRepertoires
 import com.cheacher.app.domain.OpeningTree
 import com.cheacher.app.engine.SparringElo
+import com.cheacher.app.progress.AppSettings
 import com.cheacher.app.progress.ProgressStore
 import com.cheacher.app.progress.ProgressStoreProvider
-import com.cheacher.app.progress.AppSettings
 import com.cheacher.app.progress.StoreHealth
 import com.cheacher.app.progress.TrainingRecord
 import com.cheacher.app.progress.currentEpochMillis
+import com.cheacher.app.progress.withStableNodeIds
 import com.cheacher.app.training.MistakePolicy
 import com.cheacher.app.training.OpeningEntry
 import com.cheacher.app.training.OpeningStanding
@@ -139,7 +140,13 @@ class RootViewModel(val progress: ProgressStore) : ViewModel() {
      */
     val records: StateFlow<Map<String, TrainingRecord>?> =
         progress.records
-            .map<Map<String, TrainingRecord>, Map<String, TrainingRecord>?> { it }
+            .map<Map<String, TrainingRecord>, Map<String, TrainingRecord>?> { stored ->
+                stored.mapValues { (repertoireId, record) ->
+                    trees.firstOrNull { it.repertoire.id == repertoireId }
+                        ?.let(record::withStableNodeIds)
+                        ?: record
+                }
+            }
             .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
     /** The store's condition — the shelf mentions it when something can't be read or saved. */
@@ -203,15 +210,22 @@ class RootViewModel(val progress: ProgressStore) : ViewModel() {
     }
 
     /** A [Journal] for one repertoire, writing on this app-scoped ViewModel's lifetime. */
-    fun journalFor(tree: OpeningTree): Journal = journalForId(tree.repertoire.id)
+    fun journalFor(tree: OpeningTree): Journal = journalForId(tree.repertoire.id) { record ->
+        record.withStableNodeIds(tree)
+    }
 
     /** The drill saves under a reserved id rather than an opening's — see [TrainingRecord.DRILL_RECORD_ID]. */
-    fun journalForId(repertoireId: String): Journal {
+    fun journalForId(repertoireId: String): Journal = journalForId(repertoireId) { it }
+
+    private fun journalForId(
+        repertoireId: String,
+        prepare: (TrainingRecord) -> TrainingRecord,
+    ): Journal {
         return { transform ->
             pendingJournalWrites.update { it + 1 }
             viewModelScope.launch {
                 try {
-                    progress.update(repertoireId, transform)
+                    progress.update(repertoireId) { record -> transform(prepare(record)) }
                 } finally {
                     pendingJournalWrites.update { it - 1 }
                 }

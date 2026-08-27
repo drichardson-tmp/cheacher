@@ -26,8 +26,8 @@ class MoveDrillTest {
 
     @Test
     fun findMoveTimesUntilTheFirstCorrectMove() {
-        val e4 = bank.first { it.id == "kings-pawn:0" }
-        val d4 = bank.first { it.id == "first-moves:1" }
+        val e4 = bank.first { it.id == "kings-pawn:e2e4" }
+        val d4 = bank.first { it.id == "first-moves:d2d4" }
         val started = MoveDrillState.start(listOf(e4), MoveDrillMode.FIND_MOVE, startedAt = 1_000L)
 
         val missed = started.submitMove(d4.move, nowMillis = 1_500L)
