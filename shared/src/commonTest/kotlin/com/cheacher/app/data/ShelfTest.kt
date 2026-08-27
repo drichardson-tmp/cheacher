@@ -58,10 +58,11 @@ class ShelfTest {
         }
     }
 
-    /** Every book here is written from White's side of the board. */
+    /** Both chairs are represented, while White remains the broad opening survey. */
     @Test
-    fun theShelfIsAWhiteRepertoire() {
-        assertTrue(SampleRepertoires.all.all { it.perspective == Color.WHITE })
+    fun theShelfRepresentsBothChairs() {
+        assertTrue(SampleRepertoires.all.any { it.perspective == Color.WHITE })
+        assertTrue(SampleRepertoires.all.any { it.perspective == Color.BLACK })
     }
 
     /**

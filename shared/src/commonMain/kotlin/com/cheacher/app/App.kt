@@ -40,6 +40,7 @@ import com.cheacher.app.training.OpeningStanding
 import com.cheacher.app.training.Progression
 import com.cheacher.app.training.StudyKind
 import com.cheacher.app.training.moveDrillBank
+import com.cheacher.app.training.quietBank
 import com.cheacher.app.training.nodeReviewTargetAt
 import com.cheacher.app.training.studyPlan
 import com.cheacher.app.training.syllabusAt
@@ -50,6 +51,10 @@ import com.cheacher.app.ui.screens.GuidedViewModel
 import com.cheacher.app.ui.screens.HomeScreen
 import com.cheacher.app.ui.screens.MoveDrillScreen
 import com.cheacher.app.ui.screens.MoveDrillViewModel
+import com.cheacher.app.ui.screens.BlitzScreen
+import com.cheacher.app.ui.screens.BlitzViewModel
+import com.cheacher.app.ui.screens.QuietScreen
+import com.cheacher.app.ui.screens.QuietViewModel
 import com.cheacher.app.ui.screens.SquareDrillScreen
 import com.cheacher.app.ui.screens.SquareDrillViewModel
 import com.cheacher.app.ui.screens.Journal
@@ -100,6 +105,12 @@ sealed interface Screen {
 
     /** Shelf-wide opening vocabulary in both directions, independent of progression. */
     data object MoveDrill : Screen
+
+    /** Unrelated board formations, dealt at speed. */
+    data object Blitz : Screen
+
+    /** One destination name and its exact line, with no intermediary names. */
+    data object Quiet : Screen
 
     data class Branch(
         val repertoireId: String,
@@ -373,6 +384,10 @@ class RootViewModel(val progress: ProgressStore) : ViewModel() {
         _screen.value = Screen.MoveDrill
     }
 
+    fun openBlitz() { _screen.value = Screen.Blitz }
+
+    fun openQuiet() { _screen.value = Screen.Quiet }
+
     fun home() {
         _screen.value = Screen.Home
     }
@@ -440,6 +455,8 @@ fun App() {
                     onOpenBranch = root::openBranch,
                     onOpenSquareDrill = root::openSquareDrill,
                     onOpenMoveDrill = root::openMoveDrill,
+                    onOpenBlitz = root::openBlitz,
+                    onOpenQuiet = root::openQuiet,
                     drill = records?.get(TrainingRecord.DRILL_RECORD_ID)?.squareDrill,
                     moveDrill = records?.get(TrainingRecord.DRILL_RECORD_ID)?.moveDrill,
                 )
@@ -472,6 +489,20 @@ fun App() {
                     )
                 }
 
+                is Screen.Blitz -> {
+                    val bank = remember(root.trees) { moveDrillBank(root.trees) }
+                    val vm = remember(current) {
+                        BlitzViewModel(bank, root.journalForId(TrainingRecord.DRILL_RECORD_ID))
+                    }
+                    BlitzScreen(vm, hapticsEnabled, root::home)
+                }
+
+                is Screen.Quiet -> {
+                    val bank = remember(root.trees) { quietBank(root.trees) }
+                    val vm = remember(current) { QuietViewModel(bank) }
+                    QuietScreen(vm, hapticsEnabled, root::home)
+                }
+
                 is Screen.Guided -> {
                     val tree = root.tree(current.repertoireId)
                     // One visit, one model: remembered in this content's composition and
@@ -486,6 +517,9 @@ fun App() {
                             entryPly = current.entryPly,
                             scope = sessionScope,
                             journal = root.journalFor(tree),
+                            nodeStreaks = records?.get(current.repertoireId)?.nodeReviews
+                                ?.mapValues { it.value.streak }
+                                .orEmpty(),
                         )
                     }
                     GuidedScreen(
@@ -520,6 +554,9 @@ fun App() {
                         viewModel = vm,
                         hapticsEnabled = hapticsEnabled,
                         onBack = root::home,
+                        sparringElo = records?.get(current.repertoireId)?.sparring?.rating
+                            ?: SparringElo.START,
+                        onPlayOut = { leafId -> root.openPlayOut(tree, leafId) },
                     )
                 }
 

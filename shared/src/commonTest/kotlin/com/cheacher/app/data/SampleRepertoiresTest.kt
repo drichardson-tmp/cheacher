@@ -2,6 +2,7 @@ package com.cheacher.app.data
 
 import com.cheacher.app.domain.OpeningTree
 import com.cheacher.app.domain.Repertoire
+import com.cheacher.app.chess.Color
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -33,6 +34,13 @@ class SampleRepertoiresTest {
     @Test
     fun kingsPawnIsTheFirstBookOnTheShelf() {
         assertEquals("kings-pawn", SampleRepertoires.all.first().id, "the on-ramp comes before the deep books")
+    }
+
+    @Test
+    fun shelfIncludesADeepRepertoireFromBlacksChair() {
+        val blackBooks = SampleRepertoires.all.filter { it.perspective == Color.BLACK }
+        assertTrue(blackBooks.isNotEmpty())
+        assertTrue(blackBooks.any { OpeningTree.resolve(it).lines.size >= 3 })
     }
 
     @Test

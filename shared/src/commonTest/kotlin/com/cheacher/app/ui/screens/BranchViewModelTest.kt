@@ -11,6 +11,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class BranchViewModelTest {
     private val tree = OpeningTree.resolve(tinyRepertoire())
@@ -67,5 +68,28 @@ class BranchViewModelTest {
         assertEquals(1, journal.record.missCounts[leaf.id])
         assertNull(journal.record.nodeReviews[leaf.id], "a corrected miss is not a clean recall")
         assertEquals(0, journal.record.branchCompletionsOf(leaf.id))
+    }
+
+    @Test
+    fun everyAuthoredLeafOffersItsExactPlayOutBeforeRecallContinues() = runTest {
+        val journal = RecordingJournal()
+        val vm = BranchViewModel(
+            tree = tree,
+            policy = MistakePolicy.STRICT,
+            autoReplyFor = null,
+            progress = InMemoryProgressStore(),
+            allowedNodeIds = null,
+            scope = backgroundScope,
+            journal = journal.journal,
+        )
+
+        listOf("e2e4", "e7e5", "g1f3").forEach { vm.onMove(move(it)) }
+        assertEquals(tree.lines[0].last().id, vm.playOutOffer.value)
+        assertTrue(journal.record.lineReviews.getValue(tree.lines[0].last().id).lastReviewedAt > 0L)
+        vm.dismissPlayOutOffer()
+        assertNull(vm.playOutOffer.value)
+
+        listOf("c7c5", "g1f3").forEach { vm.onMove(move(it)) }
+        assertEquals(tree.lines[1].last().id, vm.playOutOffer.value)
     }
 }

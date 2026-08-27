@@ -210,4 +210,12 @@ class GuidedSessionTest {
         // Sanity: the expected node really is the e5 reply.
         assertEquals(Squares.parse("e5"), state.expected?.move?.to)
     }
+
+    @Test
+    fun promptFadesWithRecallAndReturnsForRecovery() {
+        assertEquals("King's Pawn Opening", fadedPromptName("King's Pawn Opening", 1))
+        assertEquals("King's…", fadedPromptName("King's Pawn Opening", 2))
+        assertNull(fadedPromptName("King's Pawn Opening", 4))
+        assertEquals("King's Pawn Opening", fadedPromptName("King's Pawn Opening", 4, recoveryRevealed = true))
+    }
 }

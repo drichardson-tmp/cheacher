@@ -57,5 +57,13 @@ class FenTest {
         assertNull(Fen.parseOrNull("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP w KQkq - 0 1")) // 7 ranks
         assertNull(Fen.parseOrNull("rnbqkbnr/pppppppp/9/8/8/8/8/PPPPPPPP w KQkq - 0 1")) // bad digit
         assertNull(Fen.parseOrNull("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR x KQkq - 0 1")) // bad side
+        assertNull(Fen.parseOrNull("8/8/8/8/8/8/8/4K2k w Kx - 0 1")) // unknown castling flag
+        assertNull(Fen.parseOrNull("8/8/8/8/8/8/8/4K2k w KK - 0 1")) // duplicate castling flag
+        assertNull(Fen.parseOrNull("8/8/8/8/8/8/8/4K2k w - e4 0 1")) // impossible en-passant rank
+        assertNull(Fen.parseOrNull("8/8/8/8/8/8/8/4K2k w - - nope 1"))
+        assertNull(Fen.parseOrNull("8/8/8/8/8/8/8/4K2k w - - 0 nope"))
+        assertNull(Fen.parseOrNull("8/8/8/8/8/8/8/4K2k w - - -1 1"))
+        assertNull(Fen.parseOrNull("8/8/8/8/8/8/8/4K2k w - - 0 0"))
+        assertNull(Fen.parseOrNull("8/8/8/8/8/8/8/4K2k w - - 0 1 extra"))
     }
 }

@@ -180,6 +180,16 @@ data class GuidedPrompt(
     val moveNumberLabel: String,
 )
 
+/**
+ * Names retreat as recall strengthens: full at 0–1, a first-word cue at 2–3, and board
+ * only at 4+. A revealed idea restores the full name so a learner can recover in place.
+ */
+fun fadedPromptName(name: String, streak: Int, recoveryRevealed: Boolean = false): String? = when {
+    recoveryRevealed || streak <= 1 -> name
+    streak <= 3 -> name.substringBefore(' ') + "…"
+    else -> null
+}
+
 data class GuidedProgress(
     val lineNumber: Int,
     val lineCount: Int,

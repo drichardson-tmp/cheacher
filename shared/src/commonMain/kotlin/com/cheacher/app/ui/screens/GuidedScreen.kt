@@ -80,6 +80,7 @@ fun GuidedScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val shakes by viewModel.wrongShakes.collectAsStateWithLifecycle()
     val unlock by viewModel.unlock.collectAsStateWithLifecycle()
+    val playOutLeaf by viewModel.playOutOffer.collectAsStateWithLifecycle()
     val isReview = viewModel.kind == StudyKind.REVIEW
     val haptic = rememberTrainingHaptics(hapticsEnabled)
 
@@ -104,16 +105,18 @@ fun GuidedScreen(
 
         UnlockBannerCard(banner = unlock, onDismiss = viewModel::dismissUnlock)
 
+        playOutLeaf?.takeIf { onPlayOut != null }?.let { leafId ->
+            LeafPlayOutCard(
+                engineElo = sparringElo,
+                onPlayOut = { onPlayOut?.invoke(leafId) },
+                onDismiss = viewModel::dismissPlayOutOffer,
+            )
+        }
+
         if (state.finished) {
             val dealt = state.deal.size
             // The optional fork: this book's final walked line, played out to mate
             // against the sparring engine. Continuing the plan stays the default.
-            val finalLeafId = state.currentLine.lastOrNull()?.id
-            val playOut = if (onPlayOut != null && finalLeafId != null) {
-                PlayOutOffer(engineElo = sparringElo, onPlayOut = { onPlayOut(finalLeafId) })
-            } else {
-                null
-            }
             if (isReview) {
                 val percent = if (dealt == 0) 100 else (state.sessionScore / dealt * 100).roundToInt()
                 SessionCompleteCard(
@@ -128,7 +131,6 @@ fun GuidedScreen(
                     primaryLabel = "Continue",
                     onPrimary = onContinue,
                     onBack = onBack,
-                    playOut = playOut,
                 )
             } else {
                 SessionCompleteCard(
@@ -138,7 +140,6 @@ fun GuidedScreen(
                     primaryLabel = "Continue",
                     onPrimary = onContinue,
                     onBack = onBack,
-                    playOut = playOut,
                 )
             }
         } else {
@@ -156,13 +157,13 @@ fun GuidedScreen(
                             color = MaterialTheme.colorScheme.secondary,
                         )
                         AnimatedContent(
-                            targetState = prompt.name,
+                            targetState = viewModel.promptName(),
                             transitionSpec = {
                                 (slideInVertically { it / 3 } + fadeIn()) togetherWith fadeOut()
                             },
                             label = "prompt-name",
                         ) { name ->
-                            Text(name, style = MaterialTheme.typography.headlineMedium)
+                            Text(name ?: "Board only", style = MaterialTheme.typography.headlineMedium)
                         }
                         AnimatedVisibility(
                             visible = prompt.idea != null,
@@ -344,6 +345,23 @@ fun UnlockBannerCard(banner: UnlockBanner?, onDismiss: () -> Unit) {
 
 /** The optional fork at the end of the book: a full game against the sparring engine. */
 data class PlayOutOffer(val engineElo: Int, val onPlayOut: () -> Unit)
+
+@Composable
+fun LeafPlayOutCard(engineElo: Int, onPlayOut: () -> Unit, onDismiss: () -> Unit) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+    ) {
+        Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("Branch authored.", style = MaterialTheme.typography.titleLarge)
+            Text("Play from this exact position against the ~$engineElo engine, or keep the session intact.")
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Button(onClick = onPlayOut) { Text("Play out") }
+                OutlinedButton(onClick = onDismiss) { Text("Keep training") }
+            }
+        }
+    }
+}
 
 @Composable
 fun SessionCompleteCard(

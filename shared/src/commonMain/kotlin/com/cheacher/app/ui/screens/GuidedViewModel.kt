@@ -11,6 +11,7 @@ import com.cheacher.app.training.Progression
 import com.cheacher.app.training.ProgressionAdvance
 import com.cheacher.app.training.StudyKind
 import com.cheacher.app.training.advanceFrom
+import com.cheacher.app.training.fadedPromptName
 import com.cheacher.app.training.trunkNodeIds
 import com.cheacher.app.training.restartLine
 import com.cheacher.app.training.revealIdea
@@ -61,6 +62,7 @@ class GuidedViewModel(
     entryPly: Int = 0,
     private val scope: CoroutineScope,
     private val journal: Journal,
+    private val nodeStreaks: Map<String, Int> = emptyMap(),
 ) {
     private val _state =
         MutableStateFlow(
@@ -77,6 +79,9 @@ class GuidedViewModel(
     val wrongShakes: StateFlow<Int> = _wrongShakes.asStateFlow()
 
     private val _unlock = MutableStateFlow<UnlockBanner?>(null)
+
+    private val _playOutOffer = MutableStateFlow<String?>(null)
+    val playOutOffer: StateFlow<String?> = _playOutOffer.asStateFlow()
 
     /** The "new branch unlocked" moment, when this session's completions move the frontier. */
     val unlock: StateFlow<UnlockBanner?> = _unlock.asStateFlow()
@@ -105,12 +110,16 @@ class GuidedViewModel(
                 // back to starting at move one until it is walked clean again.
                 if (event.expected.id in tree.trunkNodeIds()) journal { it.recordTrunkFumbled() }
             }
-            is GuidedEvent.LineComplete -> journal {
-                it.recordLineCompleted(event.line.last().id)
+            is GuidedEvent.LineComplete -> {
+                _playOutOffer.value = event.line.last().id
+                journal {
+                    it.recordLineCompleted(event.line.last().id)
                     .recordLineCredit(event.line.last().id, event.credit)
+                }
             }
             GuidedEvent.SessionComplete -> if (!current.finished) {
                 val lastLeaf = current.currentLine.lastOrNull()
+                _playOutOffer.value = lastLeaf?.id
                 // The final line's credit, banked by the same submit that ended the session.
                 val credit = current.passLines.getOrNull(current.lineIndex)?.let { next.lineCredits[it] }
                 val leafIds = tree.lines.map { it.last().id }
@@ -130,6 +139,11 @@ class GuidedViewModel(
 
     fun revealIdea() = _state.update { it.revealIdea() }
 
+    /** Prompt strength is snapshotted with the session syllabus. */
+    fun promptName(): String? = _state.value.expected?.let { node ->
+        fadedPromptName(node.name, nodeStreaks[node.id] ?: 0, _state.value.ideaRevealed)
+    }
+
     fun restartLine() = _state.update { it.restartLine() }
 
     fun restartSession() {
@@ -138,6 +152,8 @@ class GuidedViewModel(
     }
 
     fun dismissUnlock() = _unlock.update { null }
+
+    fun dismissPlayOutOffer() { _playOutOffer.value = null }
 }
 
 /** One frontier move. [serial] exists because equal advances must still replay their moment. */

@@ -121,11 +121,18 @@ data class CastlingRights(
     companion object {
         val NONE = CastlingRights(false, false, false, false)
 
-        fun fromFen(field: String): CastlingRights = CastlingRights(
-            whiteKingSide = field.contains('K'),
-            whiteQueenSide = field.contains('Q'),
-            blackKingSide = field.contains('k'),
-            blackQueenSide = field.contains('q'),
-        )
+        fun fromFenOrNull(field: String): CastlingRights? {
+            if (field == "-") return NONE
+            if (field.isEmpty() || field.any { it !in "KQkq" } || field.toSet().size != field.length) return null
+            return CastlingRights(
+                whiteKingSide = field.contains('K'),
+                whiteQueenSide = field.contains('Q'),
+                blackKingSide = field.contains('k'),
+                blackQueenSide = field.contains('q'),
+            )
+        }
+
+        fun fromFen(field: String): CastlingRights =
+            fromFenOrNull(field) ?: error("invalid castling rights: $field")
     }
 }

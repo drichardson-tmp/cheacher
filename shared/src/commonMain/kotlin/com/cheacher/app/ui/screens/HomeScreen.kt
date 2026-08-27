@@ -64,6 +64,8 @@ fun HomeScreen(
     onOpenBranch: (OpeningTree) -> Unit,
     onOpenSquareDrill: () -> Unit = {},
     onOpenMoveDrill: () -> Unit = {},
+    onOpenBlitz: () -> Unit = {},
+    onOpenQuiet: () -> Unit = {},
     /** The drill's history, if any has been banked. Null reads as "never drilled". */
     drill: DrillRecord? = null,
     moveDrill: MoveDrillRecord? = null,
@@ -160,6 +162,13 @@ fun HomeScreen(
             moveCount = trees.sumOf { it.allNodes.size },
             onOpen = onOpenMoveDrill,
         )
+        RecallLabCard(
+            moveCount = trees.sumOf { it.allNodes.size },
+            lineCount = trees.sumOf { it.lines.size },
+            blitzRecord = moveDrill?.blitz,
+            onOpenBlitz = onOpenBlitz,
+            onOpenQuiet = onOpenQuiet,
+        )
 
         for (tree in trees) {
             RepertoireCard(
@@ -253,7 +262,7 @@ private fun RepertoireCard(
                         if (worst != null) {
                             val node = tree.node(worst.first)
                             val label = node?.let { "${it.moveNumberLabel}${it.san}" } ?: "the first move"
-                            append(" · trouble spot: $label (${worst.second} misses)")
+                            append(" · ${r.errorSeverityOf(worst.first).label}: $label (${worst.second} pressure)")
                         }
                     },
                     style = MaterialTheme.typography.bodyMedium,
@@ -355,6 +364,36 @@ private fun MoveDrillCard(record: MoveDrillRecord?, moveCount: Int, onOpen: () -
             Spacer(Modifier.height(2.dp))
             Row {
                 OutlinedButton(onClick = onOpen, enabled = moveCount > 0) { Text("Drill moves") }
+            }
+        }
+    }
+}
+
+/** Two deliberately different retrieval modes: formation speed and whole-line silence. */
+@Composable
+private fun RecallLabCard(
+    moveCount: Int,
+    lineCount: Int,
+    blitzRecord: DrillRecord?,
+    onOpenBlitz: () -> Unit,
+    onOpenQuiet: () -> Unit,
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+    ) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text("Recall lab", style = MaterialTheme.typography.titleMedium)
+            Text(
+                "Blitz swaps formations after every move" +
+                    (blitzRecord?.lastMedianMillis?.let { " · last ${tenths(it)}" } ?: "") +
+                    ". Quiet asks for one of $lineCount complete lines with no intermediary names.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                OutlinedButton(onClick = onOpenBlitz, enabled = moveCount > 0) { Text("Blitz") }
+                OutlinedButton(onClick = onOpenQuiet, enabled = lineCount > 0) { Text("Quiet") }
             }
         }
     }

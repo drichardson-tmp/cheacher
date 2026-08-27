@@ -56,11 +56,14 @@ fun BranchScreen(
     viewModel: BranchViewModel,
     hapticsEnabled: Boolean = true,
     onBack: () -> Unit,
+    sparringElo: Int = 700,
+    onPlayOut: ((String) -> Unit)? = null,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val shakes by viewModel.wrongShakes.collectAsStateWithLifecycle()
     val flashes by viewModel.closeFlashes.collectAsStateWithLifecycle()
     val unlock by viewModel.unlock.collectAsStateWithLifecycle()
+    val playOutLeaf by viewModel.playOutOffer.collectAsStateWithLifecycle()
     val haptic = rememberTrainingHaptics(hapticsEnabled)
 
     // One-sided practice keeps the learner's chair fixed; both-sides recall turns the
@@ -107,6 +110,14 @@ fun BranchScreen(
         )
 
         UnlockBannerCard(banner = unlock, onDismiss = viewModel::dismissUnlock)
+
+        playOutLeaf?.takeIf { onPlayOut != null }?.let { leafId ->
+            LeafPlayOutCard(
+                engineElo = sparringElo,
+                onPlayOut = { onPlayOut?.invoke(leafId) },
+                onDismiss = viewModel::dismissPlayOutOffer,
+            )
+        }
 
         if (state.finished) {
             val failed = state.progress.failedLines

@@ -25,6 +25,7 @@ internal fun TrainingRecord.withStableNodeIds(tree: OpeningTree): TrainingRecord
 
     val hasLegacyKeys = sequenceOf(
         missCounts.keys,
+        errorScores.keys,
         lineCompletions.keys,
         branchLineCompletions.keys,
         lineReviews.keys,
@@ -35,6 +36,7 @@ internal fun TrainingRecord.withStableNodeIds(tree: OpeningTree): TrainingRecord
 
     return copy(
         missCounts = missCounts.rekeyCounts(legacyIds),
+        errorScores = errorScores.rekeyCounts(legacyIds),
         lineCompletions = lineCompletions.rekeyCounts(legacyIds),
         branchLineCompletions = branchLineCompletions.rekeyCounts(legacyIds),
         lineReviews = lineReviews.rekeyLatest(legacyIds),

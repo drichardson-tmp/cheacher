@@ -265,6 +265,7 @@ data class Position(
         if (isAttacked(from, color.opposite)) return
 
         if (castling.kingSide(color) &&
+            board[Squares.of(7, homeRank)] == Piece(PieceType.ROOK, color) &&
             board[Squares.of(5, homeRank)] == null &&
             board[Squares.of(6, homeRank)] == null &&
             !isAttacked(Squares.of(5, homeRank), color.opposite)
@@ -273,6 +274,7 @@ data class Position(
         }
 
         if (castling.queenSide(color) &&
+            board[Squares.of(0, homeRank)] == Piece(PieceType.ROOK, color) &&
             board[Squares.of(1, homeRank)] == null &&
             board[Squares.of(2, homeRank)] == null &&
             board[Squares.of(3, homeRank)] == null &&
