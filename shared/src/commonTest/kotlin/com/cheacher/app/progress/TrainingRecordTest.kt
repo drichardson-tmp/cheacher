@@ -10,6 +10,28 @@ import kotlin.time.Instant
 
 class TrainingRecordTest {
     @Test
+    fun errorSeverityBuildsOnMissesAndRecoversOneStepPerBlindRecall() {
+        val stuck = TrainingRecord.empty("tiny")
+            .recordMiss("move")
+            .recordMiss("move")
+            .recordMiss("move")
+            .recordMiss("move")
+        assertEquals(ErrorSeverity.STUCK, stuck.errorSeverityOf("move"))
+        assertEquals(4, stuck.totalMisses, "history remains cumulative")
+
+        val recovering = stuck.recordNodeRecalled("move", atEpochMillis = 10L)
+        assertEquals(ErrorSeverity.SHAKY, recovering.errorSeverityOf("move"))
+        assertEquals(4, recovering.totalMisses, "recovery does not rewrite history")
+    }
+
+    @Test
+    fun legacyJsonWithoutErrorScoresSeedsSeverityFromMissHistory() {
+        val record = Json.decodeFromString<TrainingRecord>(
+            """{"repertoire_id":"tiny","miss_counts":{"move":3}}""",
+        )
+        assertEquals(ErrorSeverity.SHAKY, record.errorSeverityOf("move"))
+    }
+    @Test
     fun missesAccumulatePerNode() {
         val record = TrainingRecord.empty("italian")
             .recordMiss("0.1")

@@ -42,6 +42,8 @@ data class MoveDrillRecord(
     val findMove: DrillRecord = DrillRecord(),
     @SerialName("name_it")
     val nameIt: DrillRecord = DrillRecord(),
+    @SerialName("blitz")
+    val blitz: DrillRecord = DrillRecord(),
 )
 
 /** Folds a finished round into the record. Bests only ever improve. */

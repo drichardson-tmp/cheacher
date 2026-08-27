@@ -51,6 +51,15 @@ class PositionTest {
     }
 
     @Test
+    fun staleCastlingRightsNeedTheCorrectRook() {
+        val absent = Fen.parse("4k3/8/8/8/8/8/8/4K3 w KQ - 0 1")
+        assertFalse(absent.legalMoves().any { it.from == Squares.parse("e1") && kotlin.math.abs(it.to - it.from) == 2 })
+
+        val enemyRooks = Fen.parse("4k3/8/8/8/8/8/8/r3K2r w KQ - 0 1")
+        assertFalse(enemyRooks.legalMoves().any { it.from == Squares.parse("e1") && kotlin.math.abs(it.to - it.from) == 2 })
+    }
+
+    @Test
     fun castlingRightsDieWithTheRook() {
         val position = Fen.parse("r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1")
         val captureA8 = Move(Squares.parse("a1")!!, Squares.parse("a8")!!)

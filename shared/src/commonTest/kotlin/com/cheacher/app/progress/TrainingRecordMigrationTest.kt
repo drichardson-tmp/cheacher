@@ -15,6 +15,7 @@ class TrainingRecordMigrationTest {
         val migrated = TrainingRecord(
             repertoireId = "tiny",
             missCounts = mapOf("0.1" to 2),
+            errorScores = mapOf("0.1" to 1),
             lineCompletions = mapOf("0.1.0" to 4),
             branchLineCompletions = mapOf("0.1.0" to 3),
             lineReviews = mapOf("0.1.0" to review),
@@ -23,6 +24,7 @@ class TrainingRecordMigrationTest {
         ).withStableNodeIds(tree)
 
         assertEquals(mapOf("e2e4/c7c5" to 2), migrated.missCounts)
+        assertEquals(mapOf("e2e4/c7c5" to 1), migrated.errorScores)
         assertEquals(mapOf("e2e4/c7c5/g1f3" to 4), migrated.lineCompletions)
         assertEquals(mapOf("e2e4/c7c5/g1f3" to 3), migrated.branchLineCompletions)
         assertEquals(mapOf("e2e4/c7c5/g1f3" to review), migrated.lineReviews)

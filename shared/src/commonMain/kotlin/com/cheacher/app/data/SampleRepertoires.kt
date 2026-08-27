@@ -23,6 +23,8 @@ object SampleRepertoires {
             frenchDefence,
             caroKann,
             kingsPawnSidelines,
+            // The first repertoire from the other chair.
+            frenchAsBlack,
             // ...the 1. d4 shelf...
             queensGambit,
             indianDefences,

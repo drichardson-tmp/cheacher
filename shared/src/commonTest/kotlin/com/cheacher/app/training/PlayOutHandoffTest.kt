@@ -40,4 +40,16 @@ class PlayOutHandoffTest {
         assertTrue(state.finished)
         assertEquals("e2e4/e7e5/g1f3", state.currentLine.last().id)
     }
+
+    @Test
+    fun everyLeafHandoffPreservesTheExactResolvedPosition() {
+        for (line in tree.lines) {
+            val leaf = line.last()
+            val playOut = PlayOutState.start(tree, leaf.id)
+            assertEquals(leaf.position, playOut.position, "wrong position for ${leaf.id}")
+            assertEquals(leaf.position.sideToMove, playOut.position.sideToMove)
+            assertEquals(leaf.position.castling, playOut.position.castling)
+            assertEquals(leaf.position.enPassantSquare, playOut.position.enPassantSquare)
+        }
+    }
 }

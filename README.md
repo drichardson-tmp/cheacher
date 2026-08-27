@@ -4,15 +4,17 @@ A chess opening teacher that believes names come first and words come last.
 
 Cheacher teaches repertoires in two phases, both played out on a real board:
 
-1. **Named Concept Walkthrough (Guided).** The prompt is the canonical *name* of the
+1. **Named Concept Walkthrough (Guided).** The prompt begins as the canonical *name* of the
    line the next move creates — "King's Pawn Opening" → 1. e4, "Sicilian Defence" →
    1...c5, "Open Sicilian" → 2. Nf3 — played from both sides. There is exactly one
    human-language allowance per move: a single sentence of *why* (the "idea"), revealed
    on a wrong attempt or on demand. You cannot brute-force past a name.
+   As a move's clean-recall streak grows, the prompt fades from the full name to its
+   first word and finally to the board alone; asking for the idea restores it in place.
 
-2. **Branch Recall / Tree Pruning.** No names, no hints. A compact tree diagram sits
-   beside the board. Play a line to its authored end and that branch closes out — dims
-   green on the diagram, unplayable on the board — and you snap back to the nearest
+2. **Branch Recall / Tree Pruning.** Only the destination name remains; no per-move names
+   or hints. Play a line to its authored end and that branch closes out — green on the
+   end-of-round tree, unplayable on the board — and you snap back to the nearest
    junction that still has an open door. The round ends when the whole tree is closed.
    Mistakes are governed by a policy: **Strict** (one miss fails the branch, red flash,
    snap back) or **One Allowance** (the first miss is forgiven in place). The tree is
@@ -34,9 +36,14 @@ a prioritiser, never a gate: nothing is withheld, no date is ever waved at you, 
 is always one tap away. The shelf talks in counts and streaks instead: "Today: 1 new
 line · 2 reviews", "3 days in a row", "Ruy Lopez: 4 clean recalls".
 
-Moves that have actually caused trouble keep a smaller clock of their own. When one is
-due, Branch Recall deals a mastered line immediately before that move, so a shaky
+Moves that have actually caused trouble keep a smaller clock and recoverable severity
+of their own. When one is due, Branch Recall deals a mastered line immediately before that move, so a shaky
 ...Nc6 is tested as ...Nc6 instead of charging the whole ten-move line again.
+
+The recall lab adds two deliberately separate drills: **Blitz** deals unrelated board
+formations at speed, while **Quiet** gives only a destination name and asks for the exact
+root-to-leaf sequence. Every authored leaf also offers an optional play-out from its exact
+position against the adaptive sparring engine without replacing the normal study path.
 
 Cheacher also remembers. Every miss, every completed line, every review streak, every
 session lands in a per-repertoire `TrainingRecord`, persisted with DataStore on both
@@ -58,7 +65,8 @@ shared/src/commonMain/kotlin/com/cheacher/app/
 │                 OpeningTree (resolved against real positions at load time — an
 │                 illegal move in content fails at resolve, never at the board),
 │                 and the authoring DSL.
-├── training/     The two study modes as pure reducers: GuidedState and BranchState.
+├── training/     Study and drill modes as pure reducers: GuidedState, BranchState,
+│                 BlitzState, QuietState, MoveDrillState, and SquareDrillState.
 │                 Every transition is a value; no clocks, no coroutines, fully
 │                 testable without UI. Progression derives the depth-first mastery
 │                 ladder (mastered / unlocked / locked lines) from the tree and the
@@ -69,8 +77,8 @@ shared/src/commonMain/kotlin/com/cheacher/app/
 ├── progress/     TrainingRecord (pure accumulation of misses/completions/sessions),
 │                 ProgressStore (interface), DataStoreProgressStore (JSON blob per
 │                 repertoire in one preferences file), expect/actual file paths.
-├── data/         SampleRepertoires — the built-in Italian Game and Sicilian
-│                 Crossroads content, written with the DSL.
+├── data/         SampleRepertoires — a broad White shelf plus a French repertoire
+│                 from Black's chair, all written with the DSL.
 └── ui/           Compose Multiplatform. theme/ (warm wood & iron-gall ink identity —
                   a 60-30-10 palette with contrast-verified day and night schemes —
                   plus spring motion specs), board/ (ChessBoardView + PieceRenderer seam),
@@ -167,5 +175,3 @@ Deferred on purpose, in rough order:
   `TrainingRecord` and narrate repeat-mistake patterns — "you keep missing ...a6 in
   the Najdorf; the point is stopping Bb5+". The per-node `missCounts` map keyed by
   tree-node id is structured precisely as that feature's input.
-- **Dynamic intent fading.** Guided prompts that gradually drop the name as recall
-  strengthens, converging on Phase 2 naturally.

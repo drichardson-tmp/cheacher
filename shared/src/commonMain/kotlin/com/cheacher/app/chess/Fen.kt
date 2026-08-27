@@ -8,7 +8,7 @@ object Fen {
 
     fun parseOrNull(fen: String): Position? {
         val fields = fen.trim().split(" ").filter { it.isNotEmpty() }
-        if (fields.size < 4) return null
+        if (fields.size !in 4..6) return null
 
         val board = arrayOfNulls<Piece>(Squares.COUNT)
         val ranks = fields[0].split("/")
@@ -20,7 +20,7 @@ object Fen {
             var file = 0
             for (c in row) {
                 when {
-                    c.isDigit() -> file += c - '0'
+                    c in '1'..'8' -> file += c - '0'
                     else -> {
                         val piece = Piece.fromFenChar(c) ?: return null
                         if (file > 7) return null
@@ -38,13 +38,27 @@ object Fen {
             else -> return null
         }
 
+        val castling = CastlingRights.fromFenOrNull(fields[2]) ?: return null
+        val enPassantSquare = when (val field = fields[3]) {
+            "-" -> null
+            else -> {
+                val square = Squares.parse(field) ?: return null
+                val expectedRank = if (sideToMove == Color.WHITE) 5 else 2
+                if (Squares.rankOf(square) != expectedRank) return null
+                square
+            }
+        }
+        val halfmoveClock = fields.getOrNull(4)?.toIntOrNull() ?: if (fields.size >= 5) return null else 0
+        val fullmoveNumber = fields.getOrNull(5)?.toIntOrNull() ?: if (fields.size >= 6) return null else 1
+        if (halfmoveClock < 0 || fullmoveNumber < 1) return null
+
         return Position(
             board = board.toList(),
             sideToMove = sideToMove,
-            castling = CastlingRights.fromFen(fields[2]),
-            enPassantSquare = if (fields[3] == "-") null else Squares.parse(fields[3]),
-            halfmoveClock = fields.getOrNull(4)?.toIntOrNull() ?: 0,
-            fullmoveNumber = fields.getOrNull(5)?.toIntOrNull() ?: 1,
+            castling = castling,
+            enPassantSquare = enPassantSquare,
+            halfmoveClock = halfmoveClock,
+            fullmoveNumber = fullmoveNumber,
         )
     }
 

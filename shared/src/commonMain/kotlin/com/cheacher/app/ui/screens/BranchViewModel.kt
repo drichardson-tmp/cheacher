@@ -72,6 +72,10 @@ class BranchViewModel(
     /** The "new branch unlocked" moment, when this session's completions move the frontier. */
     val unlock: StateFlow<UnlockBanner?> = _unlock.asStateFlow()
 
+    private val _playOutOffer = MutableStateFlow<String?>(null)
+    /** The leaf just authored, offered before the rest of the recall round continues. */
+    val playOutOffer: StateFlow<String?> = _playOutOffer.asStateFlow()
+
     /** Leaves whose line took a miss this round: they may still complete, but prove nothing. */
     private val lapsedThisRound = mutableSetOf<String>()
 
@@ -117,7 +121,14 @@ class BranchViewModel(
             is BranchEvent.Missed -> recordMissAt(expectedNodeId(current), current.cursorId)
             is BranchEvent.BranchFailed -> recordMissAt(expectedNodeId(current), event.at?.id)
             is BranchEvent.Locked -> _wrongShakes.update { it + 1 }
-            is BranchEvent.BranchClosed, is BranchEvent.SessionComplete -> _closeFlashes.update { it + 1 }
+            is BranchEvent.BranchClosed -> {
+                _closeFlashes.update { it + 1 }
+                _playOutOffer.value = event.leaf.id
+            }
+            is BranchEvent.SessionComplete -> {
+                _closeFlashes.update { it + 1 }
+                _playOutOffer.value = event.leaf.id
+            }
             else -> Unit
         }
 
@@ -164,4 +175,6 @@ class BranchViewModel(
     }
 
     fun dismissUnlock() = _unlock.update { null }
+
+    fun dismissPlayOutOffer() { _playOutOffer.value = null }
 }

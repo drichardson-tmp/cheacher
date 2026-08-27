@@ -49,6 +49,23 @@ data class SparringRecord(
     val losses: Int = 0,
 )
 
+/** A current, recoverable signal; cumulative miss history remains in [TrainingRecord.missCounts]. */
+enum class ErrorSeverity(val label: String) {
+    CLEAR("clear"),
+    WOBBLY("wobbly"),
+    SHAKY("shaky"),
+    STUCK("stuck");
+
+    companion object {
+        fun fromScore(score: Int): ErrorSeverity = when (score.coerceAtLeast(0)) {
+            0 -> CLEAR
+            1 -> WOBBLY
+            in 2..3 -> SHAKY
+            else -> STUCK
+        }
+    }
+}
+
 /**
  * Everything Cheacher remembers about a learner and one repertoire.
  *
@@ -64,6 +81,12 @@ data class TrainingRecord(
     /** Node id → times the learner failed to find that node's move. The trouble map. */
     @SerialName("miss_counts")
     val missCounts: Map<String, Int> = emptyMap(),
+    /**
+     * Node id → current error pressure. A miss adds one; a later blind recall removes
+     * one. Defaulted for old records, whose cumulative misses seed the score lazily.
+     */
+    @SerialName("error_scores")
+    val errorScores: Map<String, Int> = emptyMap(),
     /** Leaf node id → times that full line was walked to its end, in either mode. */
     @SerialName("line_completions")
     val lineCompletions: Map<String, Int> = emptyMap(),
@@ -155,9 +178,12 @@ data class TrainingRecord(
 
     val sessionsCompleted: Int get() = guidedSessionsCompleted + branchSessionsCompleted
 
-    /** Node ids sorted by miss count, worst first — the seed for "trouble spots". */
+    /** Node ids sorted by current recoverable pressure, worst first. */
     fun troubleSpots(limit: Int = 3): List<Pair<String, Int>> =
-        missCounts.entries
+        (missCounts.keys + errorScores.keys)
+            .associateWith(::errorScoreOf)
+            .filterValues { it > 0 }
+            .entries
             .sortedWith(compareByDescending<Map.Entry<String, Int>> { it.value }.thenBy { it.key })
             .take(limit)
             .map { it.key to it.value }
@@ -165,6 +191,7 @@ data class TrainingRecord(
     fun recordMiss(nodeId: String): TrainingRecord =
         copy(
             missCounts = missCounts + (nodeId to (missCounts[nodeId] ?: 0) + 1),
+            errorScores = errorScores + (nodeId to errorScoreOf(nodeId) + 1),
             nodeReviews = nodeReviews[nodeId]?.let { review ->
                 nodeReviews + (nodeId to review.copy(streak = 0))
             } ?: nodeReviews,
@@ -173,6 +200,7 @@ data class TrainingRecord(
     /** One move found unaided in branch recall; grows that move's own spacing clock. */
     fun recordNodeRecalled(nodeId: String, atEpochMillis: Long): TrainingRecord =
         copy(
+            errorScores = errorScores + (nodeId to (errorScoreOf(nodeId) - 1).coerceAtLeast(0)),
             nodeReviews = nodeReviews + (
                 nodeId to LineReview(
                     lastReviewedAt = atEpochMillis,
@@ -183,6 +211,11 @@ data class TrainingRecord(
 
     /** Consecutive clean blind recalls of [nodeId], zero until the move has been proven. */
     fun nodeReviewStreakOf(nodeId: String): Int = nodeReviews[nodeId]?.streak ?: 0
+
+    /** Current pressure, seeded from cumulative history when reading a pre-severity record. */
+    fun errorScoreOf(nodeId: String): Int = errorScores[nodeId] ?: missCounts[nodeId] ?: 0
+
+    fun errorSeverityOf(nodeId: String): ErrorSeverity = ErrorSeverity.fromScore(errorScoreOf(nodeId))
 
     fun recordLineCompleted(leafId: String): TrainingRecord =
         copy(lineCompletions = lineCompletions + (leafId to (lineCompletions[leafId] ?: 0) + 1))
