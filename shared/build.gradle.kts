@@ -52,6 +52,7 @@ kotlin {
             api(compose.ui)
             implementation(compose.components.resources)
             implementation(libs.kotlinx.coroutines.core)
+            implementation(libs.kotlinx.datetime)
             implementation(libs.kotlinx.serialization.json)
             implementation(libs.androidx.datastore.preferences.core)
             implementation(libs.jetbrains.lifecycle.viewmodel.compose)

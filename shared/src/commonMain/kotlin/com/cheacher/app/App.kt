@@ -63,6 +63,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.datetime.TimeZone
 
 /**
  * Where the learner is. A sealed value instead of a nav library: a splash beat, the
@@ -374,6 +375,7 @@ fun App() {
                     records = records,
                     health = health,
                     nowEpochMillis = currentEpochMillis(),
+                    timeZone = TimeZone.currentSystemDefault(),
                     policy = policy,
                     oneSided = oneSided,
                     fullTree = fullTree,
