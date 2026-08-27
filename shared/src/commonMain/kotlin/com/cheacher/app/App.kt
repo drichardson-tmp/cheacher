@@ -59,6 +59,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -185,6 +186,15 @@ class RootViewModel(val progress: ProgressStore) : ViewModel() {
     private val pendingJournalWrites = MutableStateFlow(0)
 
     init {
+        // Settings are durable, but these mirrors keep taps immediate and give session
+        // navigation a synchronous snapshot. The store remains the source across launches.
+        viewModelScope.launch {
+            progress.settings.collect { stored ->
+                _policy.value = stored.mistakePolicy
+                _oneSided.value = stored.oneSided
+                _fullTree.value = stored.fullTree
+            }
+        }
         // Straight to the board: the app opens mid-study, never on a menu. This block
         // sits below every property deal() touches — viewModelScope.launch on the
         // immediate main dispatcher runs the coroutine body during construction, so an
@@ -196,14 +206,23 @@ class RootViewModel(val progress: ProgressStore) : ViewModel() {
 
     fun setPolicy(policy: MistakePolicy) {
         _policy.value = policy
+        viewModelScope.launch {
+            progress.updateSettings { it.copy(mistakePolicy = policy) }
+        }
     }
 
     fun setOneSided(oneSided: Boolean) {
         _oneSided.value = oneSided
+        viewModelScope.launch {
+            progress.updateSettings { it.copy(oneSided = oneSided) }
+        }
     }
 
     fun setFullTree(fullTree: Boolean) {
         _fullTree.value = fullTree
+        viewModelScope.launch {
+            progress.updateSettings { it.copy(fullTree = fullTree) }
+        }
     }
 
     fun setHapticsEnabled(enabled: Boolean) {
