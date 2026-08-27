@@ -6,6 +6,8 @@ import com.cheacher.app.domain.repertoire
 import com.cheacher.app.progress.TrainingRecord
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlinx.serialization.json.Json
 
@@ -96,35 +98,37 @@ class SchedulerTest {
     }
 
     @Test
-    fun aMissAnywhereOnTheLineBringsItBackImmediately() {
+    fun aMissBringsBackTheMoveWithoutRewritingTheLineClock() {
         val reviewedAt = 10 * DAY
         var record = mastered(TrainingRecord.empty("ladder"), leaf0, at = 0L)
             .recordBranchLineCompleted(leaf0, atEpochMillis = 5 * DAY)
             .recordBranchLineCompleted(leaf0, atEpochMillis = reviewedAt) // streak 3: a week of rest
         assertEquals(SyllabusReason.FRESH, syllabus(record, now = reviewedAt + DAY).lines[0].reason)
 
-        // Miss 3...Nc6 — a mid-line node shared by lines 0 and 1, not by the Sicilian.
+        // Miss 2...Nc6 — its move clock lapses, while the full Italian stays rested.
         val sharedNode = tree.lines[0][3].id
-        record = record.recordMiss(sharedNode).lapseLinesThrough(tree, sharedNode)
-        assertEquals(0, record.reviewStreakOf(leaf0), "the streak resets")
+        record = record
+            .recordNodeRecalled(sharedNode, atEpochMillis = reviewedAt)
+            .recordMiss(sharedNode)
+        assertEquals(3, record.reviewStreakOf(leaf0), "the full-line proof remains true")
+        assertEquals(SyllabusReason.FRESH, syllabus(record, now = reviewedAt + DAY).lines[0].reason)
+        assertEquals(0, record.nodeReviewStreakOf(sharedNode))
         assertEquals(
-            SyllabusReason.DUE,
-            syllabus(record, now = reviewedAt + DAY).lines[0].reason,
-            "trouble lines come straight back",
+            sharedNode,
+            assertNotNull(Progression(tree, record).nodeReviewTargetAt(reviewedAt + DAY)).nodeId,
         )
     }
 
     @Test
-    fun lapseThroughASharedNodeTouchesEveryLineThatNeedsIt() {
+    fun aSharedTroubleMoveProducesOneFocusedTargetNotTwoLapsedLines() {
         val record = mastered(mastered(TrainingRecord.empty("ladder"), leaf0, 0L), leaf1, 0L)
-            .recordBranchLineCompleted(leaf2, atEpochMillis = 0L)
-        val lapsed = record.lapseLinesThrough(tree, tree.lines[0][1].id) // 1...e5
-        assertEquals(0, lapsed.reviewStreakOf(leaf0))
-        assertEquals(0, lapsed.reviewStreakOf(leaf1), "the Ruy Lopez runs through 1...e5 too")
-        assertEquals(1, lapsed.reviewStreakOf(leaf2), "the Sicilian never saw 1...e5")
+            .recordMiss(tree.lines[0][1].id) // 1...e5 belongs to both mastered lines.
+        val target = assertNotNull(Progression(tree, record).nodeReviewTargetAt(DAY / 2))
 
-        val rootLapsed = record.lapseLinesThrough(tree, TrainingRecord.ROOT_NODE_KEY)
-        assertTrue(tree.lines.all { rootLapsed.reviewStreakOf(it.last().id) == 0 })
+        assertEquals(tree.lines[0][1].id, target.nodeId)
+        assertEquals(0, target.lineIndex, "one mastered carrier line is enough")
+        assertEquals(1, record.reviewStreakOf(leaf0))
+        assertEquals(1, record.reviewStreakOf(leaf1))
     }
 
     @Test
@@ -185,8 +189,8 @@ class SchedulerTest {
         val gate = drawn.guidedLineIndices
         val session = GuidedState.start(tree, lineIndices = gate)
 
-        // The record moves on mid-round — more mastery, a lapse, whatever.
-        val evolved = mastered(record, leaf1, at = 2 * DAY).recordLineLapsed(leaf0)
+        // The record moves on mid-round — more mastery, a new review, whatever.
+        val evolved = mastered(record, leaf1, at = 2 * DAY)
         val redrawn = syllabus(evolved, now = 2 * DAY)
         assertTrue(redrawn.guidedLineIndices != gate, "the world changed")
 
@@ -194,5 +198,58 @@ class SchedulerTest {
         assertEquals(listOf(0, 1), gate)
         assertEquals(gate, session.lineIndices)
         assertEquals(gate, session.submit(tree.lines[0][0].move).lineIndices)
+    }
+
+    @Test
+    fun aMissedMoveGetsAFocusedReviewStartingAtItsParent() {
+        val shaky = tree.lines[0][3] // 2...Nc6, not the whole Italian line.
+        val record = mastered(TrainingRecord.empty("ladder"), leaf0, at = 0L)
+            .recordMiss(shaky.id)
+            .recordMiss(shaky.id)
+
+        val target = assertNotNull(Progression(tree, record).nodeReviewTargetAt(nowEpochMillis = DAY))
+        assertEquals(shaky.id, target.nodeId)
+        assertEquals(0, target.lineIndex)
+        assertEquals(shaky.parentId, target.entryNodeId, "the shaky move must remain the next ask")
+        assertEquals(2, target.missCount)
+    }
+
+    @Test
+    fun aCleanFocusedRecallRestsThatMoveOnItsOwnInterval() {
+        val shaky = tree.lines[0][3]
+        val record = mastered(TrainingRecord.empty("ladder"), leaf0, at = 0L)
+            .recordMiss(shaky.id)
+            .recordNodeRecalled(shaky.id, atEpochMillis = 10 * DAY)
+
+        assertNull(
+            Progression(tree, record).nodeReviewTargetAt(nowEpochMillis = 11 * DAY - 1),
+            "streak one earns the move a full day of rest",
+        )
+        assertEquals(
+            shaky.id,
+            assertNotNull(Progression(tree, record).nodeReviewTargetAt(nowEpochMillis = 11 * DAY)).nodeId,
+        )
+    }
+
+    @Test
+    fun troubleInsideAnUnmasteredLineStaysOnTheOrdinaryLearningDeal() {
+        val shaky = tree.lines[0][3]
+        val record = TrainingRecord.empty("ladder").recordMiss(shaky.id)
+
+        assertNull(Progression(tree, record).nodeReviewTargetAt(nowEpochMillis = 100 * DAY))
+    }
+
+    @Test
+    fun oneSidedRecallOnlyTargetsMovesTheLearnerWillActuallyPlay() {
+        val blacksMove = tree.lines[0][3] // 2...Nc6
+        val record = mastered(TrainingRecord.empty("ladder"), leaf0, at = 0L)
+            .recordMiss(blacksMove.id)
+        val progression = Progression(tree, record)
+
+        assertNull(progression.nodeReviewTargetAt(DAY, learnerColor = Color.WHITE))
+        assertEquals(
+            blacksMove.id,
+            assertNotNull(progression.nodeReviewTargetAt(DAY, learnerColor = Color.BLACK)).nodeId,
+        )
     }
 }

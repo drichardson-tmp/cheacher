@@ -21,8 +21,8 @@ data class LineReview(
     @SerialName("last_reviewed_at")
     val lastReviewedAt: Long,
     /**
-     * Consecutive clean blind recalls since the last miss anywhere on the line.
-     * Drives the expanding review ladder; a lapse resets it to zero.
+     * Clean blind recalls banked for this item. Drives the expanding review ladder;
+     * callers decide whether a miss lapses the item or leaves its earned interval intact.
      */
     @SerialName("streak")
     val streak: Int,
@@ -86,6 +86,16 @@ data class TrainingRecord(
      */
     @SerialName("line_reviews")
     val lineReviews: Map<String, LineReview> = emptyMap(),
+    /**
+     * Node id → review history for moves recalled blind.
+     *
+     * [missCounts] decides which of these clocks need focused practice; keeping the
+     * successful clocks proactively means a later first miss can lapse an existing
+     * history instead of pretending the move was never known. Defaulted for every
+     * record written before per-move spacing existed.
+     */
+    @SerialName("node_reviews")
+    val nodeReviews: Map<String, LineReview> = emptyMap(),
     /**
      * Leaf node id → the credit its *most recent* guided walk earned: 1.0 found unaided,
      * 0.5 with the hint, 0.0 after a wrong move. Latest-wins rather than best-wins,
@@ -153,7 +163,26 @@ data class TrainingRecord(
             .map { it.key to it.value }
 
     fun recordMiss(nodeId: String): TrainingRecord =
-        copy(missCounts = missCounts + (nodeId to (missCounts[nodeId] ?: 0) + 1))
+        copy(
+            missCounts = missCounts + (nodeId to (missCounts[nodeId] ?: 0) + 1),
+            nodeReviews = nodeReviews[nodeId]?.let { review ->
+                nodeReviews + (nodeId to review.copy(streak = 0))
+            } ?: nodeReviews,
+        )
+
+    /** One move found unaided in branch recall; grows that move's own spacing clock. */
+    fun recordNodeRecalled(nodeId: String, atEpochMillis: Long): TrainingRecord =
+        copy(
+            nodeReviews = nodeReviews + (
+                nodeId to LineReview(
+                    lastReviewedAt = atEpochMillis,
+                    streak = (nodeReviews[nodeId]?.streak ?: 0) + 1,
+                )
+                ),
+        )
+
+    /** Consecutive clean blind recalls of [nodeId], zero until the move has been proven. */
+    fun nodeReviewStreakOf(nodeId: String): Int = nodeReviews[nodeId]?.streak ?: 0
 
     fun recordLineCompleted(leafId: String): TrainingRecord =
         copy(lineCompletions = lineCompletions + (leafId to (lineCompletions[leafId] ?: 0) + 1))
@@ -189,17 +218,6 @@ data class TrainingRecord(
                     )
             },
         )
-
-    /**
-     * A miss landed somewhere on [leafId]'s line: the streak goes back to zero, so the
-     * line jumps to the front of the review queue. [LineReview.lastReviewedAt] survives —
-     * the *when* is still true, only the *how solid* changed. A line with no history yet
-     * has nothing to lapse.
-     */
-    fun recordLineLapsed(leafId: String): TrainingRecord {
-        val review = lineReviews[leafId] ?: return this
-        return copy(lineReviews = lineReviews + (leafId to review.copy(streak = 0)))
-    }
 
     /** One perfect walk down the shared road into the opening — see [trunkClears]. */
     fun recordTrunkCleared(): TrainingRecord = copy(trunkClears = trunkClears + 1)

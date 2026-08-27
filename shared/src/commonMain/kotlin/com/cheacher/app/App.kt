@@ -40,6 +40,7 @@ import com.cheacher.app.training.OpeningStanding
 import com.cheacher.app.training.Progression
 import com.cheacher.app.training.StudyKind
 import com.cheacher.app.training.moveDrillBank
+import com.cheacher.app.training.nodeReviewTargetAt
 import com.cheacher.app.training.studyPlan
 import com.cheacher.app.training.syllabusAt
 import com.cheacher.app.ui.screens.BranchScreen
@@ -108,6 +109,8 @@ sealed interface Screen {
         val allowedNodeIds: Set<String>?,
         /** The earned trunk end the round opens on, or null to start at move one. */
         val entryNodeId: String? = null,
+        /** A focused move drill must not masquerade as a clean recall of the whole line. */
+        val focusedReview: Boolean = false,
     ) : Screen
 
     /**
@@ -324,14 +327,34 @@ class RootViewModel(val progress: ProgressStore) : ViewModel() {
     fun openBranch(tree: OpeningTree) {
         viewModelScope.launch {
             val record = settledRecordFor(tree)
-            val allowed = if (_fullTree.value) {
+            val progression = Progression(tree, record)
+            val learnerColor = tree.repertoire.perspective.takeIf { _oneSided.value }
+            val target = if (_fullTree.value) {
                 null
             } else {
-                Progression(tree, record).syllabusAt(currentEpochMillis()).branchAllowedNodeIds
+                progression.nodeReviewTargetAt(currentEpochMillis(), learnerColor)
             }
-            val entry = if (_fullTree.value) null else OpeningEntry(tree, record).entryNode?.id
+            val allowed = if (_fullTree.value) {
+                null
+            } else if (target != null) {
+                tree.lines[target.lineIndex].mapTo(mutableSetOf()) { it.id }
+            } else {
+                progression.syllabusAt(currentEpochMillis()).branchAllowedNodeIds
+            }
+            val entry = when {
+                _fullTree.value -> null
+                target != null -> target.entryNodeId
+                else -> OpeningEntry(tree, record).entryNode?.id
+            }
             _screen.value =
-                Screen.Branch(tree.repertoire.id, _policy.value, _oneSided.value, allowed, entry)
+                Screen.Branch(
+                    tree.repertoire.id,
+                    _policy.value,
+                    _oneSided.value,
+                    allowed,
+                    entry,
+                    focusedReview = target != null,
+                )
         }
     }
 
@@ -488,6 +511,7 @@ fun App() {
                             progress = root.progress,
                             allowedNodeIds = current.allowedNodeIds,
                             entryNodeId = current.entryNodeId,
+                            focusedReview = current.focusedReview,
                             scope = sessionScope,
                             journal = root.journalFor(tree),
                         )

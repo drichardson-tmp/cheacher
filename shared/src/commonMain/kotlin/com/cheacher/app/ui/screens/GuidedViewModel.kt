@@ -12,7 +12,6 @@ import com.cheacher.app.training.ProgressionAdvance
 import com.cheacher.app.training.StudyKind
 import com.cheacher.app.training.advanceFrom
 import com.cheacher.app.training.trunkNodeIds
-import com.cheacher.app.training.lapseLinesThrough
 import com.cheacher.app.training.restartLine
 import com.cheacher.app.training.revealIdea
 import com.cheacher.app.training.submit
@@ -99,9 +98,9 @@ class GuidedViewModel(
         when (val event = next.lastEvent) {
             is GuidedEvent.Wrong -> {
                 _wrongShakes.update { it + 1 }
-                // Forgetting a move lapses every line that needs it, guided or not — the
-                // review streak is about the move being safe, not about which mode asked.
-                journal { it.recordMiss(event.expected.id).lapseLinesThrough(tree, event.expected.id) }
+                // The exact move comes back on its own clock. A guided miss must not
+                // rewrite every line review that happens to share the position.
+                journal { it.recordMiss(event.expected.id) }
                 // Forgetting one *on the road in* also hands the entry back: sessions go
                 // back to starting at move one until it is walked clean again.
                 if (event.expected.id in tree.trunkNodeIds()) journal { it.recordTrunkFumbled() }

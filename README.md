@@ -27,11 +27,16 @@ new turn". Landing a new fork is a small brass moment ("Unlocked: Ruy Lopez").
 Mastered lines are never filed away. Every session mixes the new line with reviews:
 each clean blind recall of a line grows its streak, and the streak sets how long the
 line rests before the coach deals it again — roughly 1, 3, 7, 14, then 30 days, the
-classic expanding-retrieval ladder. Miss a move anywhere on a line and its streak resets,
-so trouble lines come straight back. The ladder is a prioritiser, never a gate: nothing
-is withheld, no date is ever waved at you, and "Full tree" — everything open at once —
+classic expanding-retrieval ladder. Miss a move and that move's own clock resets, so the
+trouble position comes back without dragging every line through it along. The ladder is
+a prioritiser, never a gate: nothing is withheld, no date is ever waved at you, and
+"Full tree" — everything open at once —
 is always one tap away. The shelf talks in counts and streaks instead: "Today: 1 new
 line · 2 reviews", "3 days in a row", "Ruy Lopez: 4 clean recalls".
+
+Moves that have actually caused trouble keep a smaller clock of their own. When one is
+due, Branch Recall deals a mastered line immediately before that move, so a shaky
+...Nc6 is tested as ...Nc6 instead of charging the whole ten-move line again.
 
 Cheacher also remembers. Every miss, every completed line, every review streak, every
 session lands in a per-repertoire `TrainingRecord`, persisted with DataStore on both
@@ -164,6 +169,3 @@ Deferred on purpose, in rough order:
   tree-node id is structured precisely as that feature's input.
 - **Dynamic intent fading.** Guided prompts that gradually drop the name as recall
   strengthens, converging on Phase 2 naturally.
-- **Per-move spacing.** The review ladder currently works line-by-line — the honest
-  unit while repertoires stay small. Per-node scheduling (each move on its own clock)
-  is a natural refinement once `missCounts` has enough history to justify it.

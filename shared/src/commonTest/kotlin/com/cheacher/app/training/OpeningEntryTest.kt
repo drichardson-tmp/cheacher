@@ -248,6 +248,23 @@ class OpeningEntryTest {
     }
 
     @Test
+    fun focusedRecallCanOpenImmediatelyBeforeATroublesomeMove() {
+        val line = italian.lines[0]
+        val troublesome = line.last()
+        val entry = assertNotNull(troublesome.parentId)
+        val focused = BranchState.start(
+            italian,
+            allowedNodeIds = line.mapTo(mutableSetOf()) { it.id },
+            entryNodeId = entry,
+        )
+
+        assertEquals(entry, focused.cursorId)
+        assertEquals(troublesome.id, focused.targetLeaf?.id)
+        assertEquals(troublesome.move, focused.openMoves.single().move)
+        assertEquals(line.dropLast(1).map { it.id }, focused.path.map { it.id })
+    }
+
+    @Test
     fun aBookThatForksAtMoveOneHasNoRoadIn() {
         val forked = OpeningTree.resolve(
             repertoire("forked", "Forked", Color.WHITE) {
