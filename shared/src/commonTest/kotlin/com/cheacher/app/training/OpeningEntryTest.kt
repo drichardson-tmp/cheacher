@@ -34,6 +34,27 @@ private fun italianish() = repertoire("italianish", "Italianish", Color.WHITE) {
     }
 }
 
+/** Two levels of forks: the Giuoco subgroup sits inside the Italian fork. */
+private fun nestedItalianish() = repertoire("nested-italianish", "Nested Italianish", Color.WHITE) {
+    move("e4", "King's Pawn Opening") {
+        move("e5", "Open Game") {
+            move("Nf3", "King's Knight Opening") {
+                move("Nc6", "Normal Variation") {
+                    move("Bc4", "Italian Game") {
+                        move("Bc5", "Giuoco Piano") {
+                            move("c3", "Giuoco Pianissimo")
+                            move("d3", "Quiet Italian")
+                        }
+                        move("Nf6", "Two Knights Defence") {
+                            move("Ng5", "Knight Attack")
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 class OpeningEntryTest {
     private val tiny = OpeningTree.resolve(tinyRepertoire())
     private val italian = OpeningTree.resolve(italianish())
@@ -119,6 +140,62 @@ class OpeningEntryTest {
         val restarted = walked.submit(move("g8f6")).restartLine()
         assertEquals(5, restarted.plyIndex)
         assertEquals("Two Knights Defence", restarted.prompt?.name)
+    }
+
+    @Test
+    fun guidedEarnsTheForkImmediatelyAndUsesItForTheNextLine() {
+        val walked = GuidedState.start(italian)
+            .submit(move("e2e4"))
+            .submit(move("e7e5"))
+            .submit(move("g1f3"))
+            .submit(move("b8c6"))
+            .submit(move("f1c4")) // arrived at the Italian fork cleanly
+            .submit(move("f8c5"))
+            .submit(move("c2c3"))
+
+        assertIs<GuidedEvent.LineComplete>(walked.lastEvent)
+        assertEquals(5, walked.plyIndex, "the checkpoint applies in the session that earned it")
+        assertEquals("Two Knights Defence", walked.prompt?.name)
+        assertEquals(0, walked.progress.plyNumber)
+    }
+
+    @Test
+    fun aHintBeforeTheForkDoesNotEarnTheCheckpoint() {
+        var walked = GuidedState.start(italian).revealIdea()
+        for (uci in listOf("e2e4", "e7e5", "g1f3", "b8c6", "f1c4", "f8c5", "c2c3")) {
+            walked = walked.submit(move(uci))
+        }
+
+        assertIs<GuidedEvent.LineComplete>(walked.lastEvent)
+        assertEquals(0, walked.plyIndex)
+        assertEquals("King's Pawn Opening", walked.prompt?.name)
+    }
+
+    @Test
+    fun aHintAfterTheForkDoesNotTakeTheEarnedCheckpointAway() {
+        var walked = GuidedState.start(italian)
+        for (uci in listOf("e2e4", "e7e5", "g1f3", "b8c6", "f1c4")) {
+            walked = walked.submit(move(uci))
+        }
+        walked = walked.revealIdea().submit(move("f8c5")).submit(move("c2c3"))
+
+        assertEquals(5, walked.plyIndex, "only the unaided arrival matters")
+        assertEquals("Two Knights Defence", walked.prompt?.name)
+    }
+
+    @Test
+    fun nestedSubgroupsResumeDeepThenFallBackToTheirParentFork() {
+        val tree = OpeningTree.resolve(nestedItalianish())
+        var state = GuidedState.start(tree)
+        for (uci in listOf("e2e4", "e7e5", "g1f3", "b8c6", "f1c4", "f8c5", "c2c3")) {
+            state = state.submit(move(uci))
+        }
+        assertEquals(6, state.plyIndex, "the next Giuoco line resumes after ...Bc5")
+        assertEquals("Quiet Italian", state.prompt?.name)
+
+        state = state.submit(move("d2d3"))
+        assertEquals(5, state.plyIndex, "leaving the subgroup falls back to the Italian fork")
+        assertEquals("Two Knights Defence", state.prompt?.name)
     }
 
     @Test
