@@ -18,6 +18,7 @@ class TrainingRecordMigrationTest {
             lineCompletions = mapOf("0.1.0" to 4),
             branchLineCompletions = mapOf("0.1.0" to 3),
             lineReviews = mapOf("0.1.0" to review),
+            nodeReviews = mapOf("0.1" to review),
             lineCredits = mapOf("0.1.0" to 0.5),
         ).withStableNodeIds(tree)
 
@@ -25,6 +26,7 @@ class TrainingRecordMigrationTest {
         assertEquals(mapOf("e2e4/c7c5/g1f3" to 4), migrated.lineCompletions)
         assertEquals(mapOf("e2e4/c7c5/g1f3" to 3), migrated.branchLineCompletions)
         assertEquals(mapOf("e2e4/c7c5/g1f3" to review), migrated.lineReviews)
+        assertEquals(mapOf("e2e4/c7c5" to review), migrated.nodeReviews)
         assertEquals(mapOf("e2e4/c7c5/g1f3" to 0.5), migrated.lineCredits)
     }
 

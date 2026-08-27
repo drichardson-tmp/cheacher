@@ -132,10 +132,10 @@ data class BranchState(
          * [NodeStatus.LOCKED] — unplayable, unpenalised, and outside the score. Null
          * means the whole tree, which keeps full-tree practice exactly as it was.
          *
-         * [entryNodeId] is the earned trunk end ([OpeningEntry.entryNode]): the round
-         * opens with that road already walked. Ignored unless the node is real, on the
-         * trunk, and unlocked — a gate the learner has not reached must never be
-         * skipped past by an entry drawn from a different snapshot.
+         * [entryNodeId] is either the earned trunk end ([OpeningEntry.entryNode]) or the
+         * parent of a focused per-move review. The round opens with that path already
+         * walked. It is ignored unless the node is unlocked and is an ancestor of every
+         * active line — a gate can never skip into unrelated chess.
          */
         fun start(
             tree: OpeningTree,
@@ -151,15 +151,28 @@ data class BranchState(
                     .associate { it.id to NodeStatus.LOCKED }
             }
             val trunk = tree.trunk()
-            val trunkIds = trunk.map { it.id }
-            val entry = entryNodeId
-                ?.takeIf { it in trunkIds && trunkIds.none { id -> locked.containsKey(id) } }
+            val unlockedLeaves = tree.lines.map { it.last() }
+                .filter { locked[it.id]?.isClosed != true }
+            val entryNode = entryNodeId?.let(tree::node)
+            val entryPath = entryNode?.let { node ->
+                generateSequence(node) { it.parentId?.let(tree::node) }.toList().asReversed()
+            }.orEmpty()
+            val entry = entryNode
+                ?.takeIf { node ->
+                    node.id !in locked &&
+                        unlockedLeaves.isNotEmpty() &&
+                        unlockedLeaves.all { leaf ->
+                            generateSequence(leaf) { it.parentId?.let(tree::node) }
+                                .any { it.id == node.id }
+                        }
+                }
+                ?.id
             // Everything down to the entry reads as travelled, so the diagram and the move
             // strip show the road in as history rather than as something still to find.
             val walkedIn = if (entry == null) {
                 emptyMap()
             } else {
-                trunk.take(trunkIds.indexOf(entry) + 1).associate { it.id to NodeStatus.IN_PROGRESS }
+                entryPath.associate { it.id to NodeStatus.IN_PROGRESS }
             }
             return BranchState(
                 tree = tree,

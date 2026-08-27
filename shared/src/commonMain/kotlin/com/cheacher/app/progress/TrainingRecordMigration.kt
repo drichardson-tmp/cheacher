@@ -28,6 +28,7 @@ internal fun TrainingRecord.withStableNodeIds(tree: OpeningTree): TrainingRecord
         lineCompletions.keys,
         branchLineCompletions.keys,
         lineReviews.keys,
+        nodeReviews.keys,
         lineCredits.keys,
     ).flatten().any(legacyIds::containsKey)
     if (!hasLegacyKeys) return this
@@ -37,6 +38,7 @@ internal fun TrainingRecord.withStableNodeIds(tree: OpeningTree): TrainingRecord
         lineCompletions = lineCompletions.rekeyCounts(legacyIds),
         branchLineCompletions = branchLineCompletions.rekeyCounts(legacyIds),
         lineReviews = lineReviews.rekeyLatest(legacyIds),
+        nodeReviews = nodeReviews.rekeyLatest(legacyIds),
         lineCredits = lineCredits.rekeyLatest(legacyIds),
     )
 }

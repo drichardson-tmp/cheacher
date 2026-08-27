@@ -1,18 +1,20 @@
 package com.cheacher.app.training
 
+import com.cheacher.app.chess.Color
 import com.cheacher.app.domain.OpeningTree
 import com.cheacher.app.progress.LineReview
 import com.cheacher.app.progress.TrainingRecord
 
 /**
- * The expanding review ladder: streak n clean blind recalls → the line's next review is
- * suggested roughly 1, 3, 7, 14, then 30 days out (capped at 30).
+ * The expanding review ladder: streak n clean blind recalls → an item's next review is
+ * suggested roughly 1, 3, 7, 14, then 30 days out (capped at 30). Items are whole lines
+ * on the ordinary syllabus and individual troublesome moves on focused recall.
  *
  * Why this curve: each successful retrieval roughly doubles-to-triples how long a memory
  * holds, so the classic Leitner ladder tracks the psychology closely enough — and unlike
  * a fractional SM-2 ease factor, "come back in a week" is a sentence a learner can say
  * out loud. Legibility is the product here, the same bet as one-sentence ideas. A lapse
- * resets the streak to zero, which puts the line at the front of the queue.
+ * resets the streak to zero, which puts that item at the front of the queue.
  *
  * The ladder is a *prioritiser*, never a gate: dueness decides which reviews join today's
  * suggested session and in what order, and nothing is ever locked away or postponed at
@@ -21,14 +23,14 @@ import com.cheacher.app.progress.TrainingRecord
 object ReviewLadder {
     val intervalDays: List<Long> = listOf(1, 3, 7, 14, 30)
 
-    /** Suggested millis between review n and review n+1 of a line with [streak] clean recalls. */
+    /** Suggested millis between review n and review n+1 of an item with [streak] clean recalls. */
     fun intervalMillis(streak: Int): Long =
         if (streak <= 0) 0L
         else intervalDays[(streak - 1).coerceAtMost(intervalDays.lastIndex)] * TrainingRecord.DAY_MILLIS
 
     /**
-     * When a line earns its next look. No history reads as due since forever — a legacy
-     * record's mastered lines, or a lapsed line, go straight to the front of the queue.
+     * When an item earns its next look. No history reads as due since forever — legacy
+     * records and explicitly lapsed items go straight to the front of the queue.
      */
     fun dueAt(review: LineReview?): Long =
         review?.let { it.lastReviewedAt + intervalMillis(it.streak) } ?: 0L
@@ -54,6 +56,18 @@ data class SyllabusLine(
     val dueAtEpochMillis: Long,
     /** The line's clean-recall streak when the syllabus was drawn — the tiebreak. */
     val streak: Int = 0,
+)
+
+/** One troublesome move whose own review interval has elapsed. */
+data class NodeReviewTarget(
+    val nodeId: String,
+    /** A mastered line that contains the move and can carry the focused recall. */
+    val lineIndex: Int,
+    /** Start here so [nodeId] itself is still the move the learner must find. */
+    val entryNodeId: String?,
+    val dueAtEpochMillis: Long,
+    val streak: Int,
+    val missCount: Int,
 )
 
 /**
@@ -132,6 +146,47 @@ fun Progression.syllabusAt(nowEpochMillis: Long): Syllabus {
 }
 
 /**
+ * Picks one due move for a below-line recall.
+ *
+ * Only moves with a recorded miss participate, and only once a line containing the
+ * move is mastered: unfinished lines are already on the ordinary learning deal. Most
+ * overdue wins, then weakest streak, then the most repeatedly missed move. The entry is
+ * the move's parent, so the resulting branch round asks for the troublesome move rather
+ * than dropping the learner after it.
+ */
+fun Progression.nodeReviewTargetAt(
+    nowEpochMillis: Long,
+    /** In one-sided recall, ignore moves Cheacher would auto-play for the opponent. */
+    learnerColor: Color? = null,
+): NodeReviewTarget? =
+    tree.allNodes.mapNotNull { node ->
+        if (learnerColor != null && node.mover != learnerColor) return@mapNotNull null
+        val misses = record.missCounts[node.id] ?: return@mapNotNull null
+        if (misses <= 0) return@mapNotNull null
+        val lineIndex = tree.lines.indices.firstOrNull { index ->
+            statusOf(index) == LineStatus.MASTERED && tree.lines[index].any { it.id == node.id }
+        } ?: return@mapNotNull null
+        val review = record.nodeReviews[node.id]
+        val dueAt = ReviewLadder.dueAt(review)
+        if (dueAt > nowEpochMillis) return@mapNotNull null
+        NodeReviewTarget(
+            nodeId = node.id,
+            lineIndex = lineIndex,
+            entryNodeId = node.parentId,
+            dueAtEpochMillis = dueAt,
+            streak = review?.streak ?: 0,
+            missCount = misses,
+        )
+    }.minWithOrNull(
+        compareBy<NodeReviewTarget>(
+            { it.dueAtEpochMillis },
+            { it.streak },
+            { -it.missCount },
+            { it.lineIndex },
+        ),
+    )
+
+/**
  * The leaf of every line that runs through [nodeId] — the lines a miss at that node
  * touches. [TrainingRecord.ROOT_NODE_KEY] (a blunder before the first move) touches
  * every line.
@@ -142,12 +197,3 @@ fun OpeningTree.leafIdsThrough(nodeId: String): List<String> =
     } else {
         lines.filter { line -> line.any { it.id == nodeId } }.map { it.last().id }
     }
-
-/**
- * Resets the review streak of every line that runs through [nodeId] — a missed move is
- * a miss in each line that needs it, shared prefix or not, so all of them come back
- * sooner. Lives here rather than on the record because only the tree knows which lines
- * a node belongs to; the record stays tree-free.
- */
-fun TrainingRecord.lapseLinesThrough(tree: OpeningTree, nodeId: String): TrainingRecord =
-    tree.leafIdsThrough(nodeId).fold(this) { acc, leafId -> acc.recordLineLapsed(leafId) }

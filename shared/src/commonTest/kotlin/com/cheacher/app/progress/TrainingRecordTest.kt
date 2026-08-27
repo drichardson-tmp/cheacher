@@ -115,6 +115,7 @@ class TrainingRecordTest {
         val record = TrainingRecord.empty("sicilian")
             .recordSessionStart(42L, MistakePolicy.STRICT)
             .recordMiss("0.0")
+            .recordNodeRecalled("0.0", atEpochMillis = 42L)
             .recordLineCompleted("0.0.1")
             .recordBranchLineCompleted("0.0.1", atEpochMillis = 43L)
             .recordBranchSessionCompleted(cleanSweep = false)
@@ -138,17 +139,16 @@ class TrainingRecordTest {
     }
 
     @Test
-    fun lapseResetsTheStreakButKeepsTheTimestamp() {
+    fun movesKeepTheirOwnRecallClockAndAMissLapsesOnlyThatMove() {
         val record = TrainingRecord.empty("x")
-            .recordBranchLineCompleted("0.0.0", atEpochMillis = 100L)
-            .recordBranchLineCompleted("0.0.0", atEpochMillis = 200L)
-            .recordLineLapsed("0.0.0")
-        assertEquals(LineReview(lastReviewedAt = 200L, streak = 0), record.lineReviews["0.0.0"])
-        assertEquals(
-            TrainingRecord.empty("x"),
-            TrainingRecord.empty("x").recordLineLapsed("0.0.0"),
-            "lapsing a line with no history is a no-op",
-        )
+            .recordNodeRecalled("e2e4/e7e5", atEpochMillis = 100L)
+            .recordNodeRecalled("e2e4/e7e5", atEpochMillis = 200L)
+            .recordNodeRecalled("e2e4/c7c5", atEpochMillis = 300L)
+            .recordMiss("e2e4/e7e5")
+
+        assertEquals(LineReview(lastReviewedAt = 200L, streak = 0), record.nodeReviews["e2e4/e7e5"])
+        assertEquals(0, record.nodeReviewStreakOf("e2e4/e7e5"))
+        assertEquals(1, record.nodeReviewStreakOf("e2e4/c7c5"), "an unrelated move keeps its clock")
     }
 
     @Test
@@ -159,6 +159,7 @@ class TrainingRecordTest {
         val blob = """{"repertoire_id":"italian","line_completions":{"0.0.0":3},"branch_line_completions":{"0.0.0":1}}"""
         val record = json.decodeFromString<TrainingRecord>(blob)
         assertEquals(emptyMap(), record.lineReviews)
+        assertEquals(emptyMap(), record.nodeReviews)
         assertEquals(0, record.reviewStreakOf("0.0.0"))
     }
 
