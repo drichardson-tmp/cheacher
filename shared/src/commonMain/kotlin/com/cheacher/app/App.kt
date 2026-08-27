@@ -14,6 +14,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.ExperimentalComposeUiApi
+import androidx.compose.ui.backhandler.BackHandler
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -334,6 +336,8 @@ class RootViewModel(val progress: ProgressStore) : ViewModel() {
     }
 }
 
+@Suppress("DEPRECATION")
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 fun App() {
     CheacherTheme {
@@ -348,6 +352,12 @@ fun App() {
         // A persisted opt-out must win even during the store's first read. Feedback is
         // therefore quiet until settings arrive; a fresh install emits the default on.
         val hapticsEnabled = settings?.hapticsEnabled == true
+
+        // The system back gesture is the shelf's other door. Every session screen already
+        // offers "← Shelf"; without this the platform dispatcher finds no handler and
+        // closes the app mid-session instead. The shelf itself stays unhandled, so back
+        // there still leaves the app — that is the expected exit.
+        BackHandler(enabled = screen != Screen.Home && screen != Screen.Dealing) { root.home() }
 
         AnimatedContent(
             targetState = screen,

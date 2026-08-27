@@ -50,6 +50,10 @@ kotlin {
             api(compose.foundation)
             api(compose.material3)
             api(compose.ui)
+            // No `compose.*` accessor exists for the back-gesture artifact, and it only
+            // reaches the runtime classpath transitively — so name it, pinned to the same
+            // version ref as the rest of runtime/foundation/ui.
+            api(libs.compose.ui.backhandler)
             implementation(compose.components.resources)
             implementation(libs.kotlinx.coroutines.core)
             implementation(libs.kotlinx.datetime)
