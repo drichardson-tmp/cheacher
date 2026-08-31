@@ -39,17 +39,14 @@ class OpeningStanding(val tree: OpeningTree, val record: TrainingRecord) {
     /** When the ladder suggests the next look at this opening. Meaningful only when [learned]. */
     val dueAtEpochMillis: Long = ReviewLadder.dueAt(record.openingReview)
 
-    /** Lines whose latest walk was not a clean, unaided pass — the LEARN deal, in DFS order. */
-    val unaccountedLineIndices: List<Int> =
-        tree.lines.indices.filter { record.creditOf(tree.lines[it].last().id) < 1.0 }
-
     /**
-     * What a LEARN session should walk. Normally the unaccounted lines; in the rare gap
-     * where every line reads clean but the finishing session never landed (quit at the
-     * last board), the whole book — an empty deal would finish instantly and deal again,
-     * forever.
+     * Absolute line index → the credit that line's latest walk banked. Handed to a LEARN
+     * session so it opens holding everything the record already knows: accounted lines
+     * count toward the score and are not walked again, and the session picks up at the
+     * first line still short of a clean pass.
      */
-    val learnDeal: List<Int> = unaccountedLineIndices.ifEmpty { tree.lines.indices.toList() }
+    val bankedCredits: Map<Int, Double> =
+        tree.lines.indices.associateWith { record.creditOf(tree.lines[it].last().id) }
 }
 
 /** One dealt session: which opening, why, and (for LEARN) exactly which lines. */
@@ -58,6 +55,11 @@ data class StudyTask(
     val kind: StudyKind,
     /** Null walks the whole book (reviews always do); otherwise exactly these lines. */
     val lineIndices: List<Int>?,
+    /**
+     * Credits the record already holds for this book, by line index — empty for reviews,
+     * which re-earn every line. See [GuidedState.priorCredits].
+     */
+    val priorCredits: Map<Int, Double> = emptyMap(),
 )
 
 /**
@@ -88,8 +90,10 @@ fun studyPlan(
         .sortedWith(byUrgency)
         .map { StudyTask(it.tree, StudyKind.REVIEW, lineIndices = null) }
 
+    // The whole book is dealt, credits and all: what is already accounted for stays
+    // accounted for, and study resumes at the first line still owed a clean walk.
     val learn = standings.firstOrNull { !it.learned }
-        ?.let { StudyTask(it.tree, StudyKind.LEARN, it.learnDeal) }
+        ?.let { StudyTask(it.tree, StudyKind.LEARN, lineIndices = null, priorCredits = it.bankedCredits) }
 
     val plan = due + listOfNotNull(learn)
     if (plan.isNotEmpty()) return plan

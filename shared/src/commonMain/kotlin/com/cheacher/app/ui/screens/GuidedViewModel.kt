@@ -59,6 +59,7 @@ class GuidedViewModel(
     lineIndices: List<Int>?,
     val kind: StudyKind,
     entryPly: Int = 0,
+    priorCredits: Map<Int, Double> = emptyMap(),
     private val scope: CoroutineScope,
     private val journal: Journal,
 ) {
@@ -69,6 +70,7 @@ class GuidedViewModel(
                 lineIndices,
                 masteryLoop = kind == StudyKind.LEARN,
                 entryPly = entryPly,
+                priorCredits = priorCredits,
             ),
         )
     val state: StateFlow<GuidedState> = _state.asStateFlow()
@@ -83,6 +85,10 @@ class GuidedViewModel(
 
     init {
         journal { it.recordSessionStart(currentEpochMillis()) }
+        // Everything dealt was already banked clean in an earlier visit — the book was
+        // finished move by move, only the closing session never landed. Close it now
+        // rather than making the learner walk a book they have already answered.
+        if (_state.value.finished) journalSessionComplete()
         watchFrontier(scope, tree, tree.repertoire.id, progress, _unlock)
     }
 
@@ -113,18 +119,26 @@ class GuidedViewModel(
                 val lastLeaf = current.currentLine.lastOrNull()
                 // The final line's credit, banked by the same submit that ended the session.
                 val credit = current.passLines.getOrNull(current.lineIndex)?.let { next.lineCredits[it] }
-                val leafIds = tree.lines.map { it.last().id }
-                val at = currentEpochMillis()
-                journal { r ->
-                    val walked = lastLeaf?.let {
+                journalSessionComplete { r ->
+                    lastLeaf?.let {
                         r.recordLineCompleted(it.id).recordLineCredit(it.id, credit ?: 1.0)
                     } ?: r
-                    // The opening's review clock rolls on the credits just written: a fully
-                    // accounted book starts (or grows) its streak, a slipped review resets it.
-                    walked.recordGuidedSessionCompleted().recordOpeningOutcome(leafIds, at)
                 }
             }
             else -> Unit
+        }
+    }
+
+    /**
+     * Closes the session in the journal, after [walked] writes whatever the finishing
+     * move itself earned. The opening's review clock rolls on the credits just written:
+     * a fully accounted book starts (or grows) its streak, a slipped review resets it.
+     */
+    private fun journalSessionComplete(walked: (TrainingRecord) -> TrainingRecord = { it }) {
+        val leafIds = tree.lines.map { it.last().id }
+        val at = currentEpochMillis()
+        journal { r ->
+            walked(r).recordGuidedSessionCompleted().recordOpeningOutcome(leafIds, at)
         }
     }
 
@@ -133,7 +147,9 @@ class GuidedViewModel(
     fun restartLine() = _state.update { it.restartLine() }
 
     fun restartSession() {
-        _state.update { GuidedState.start(it.tree, it.lineIndices, it.masteryLoop, it.entryPly) }
+        _state.update {
+            GuidedState.start(it.tree, it.lineIndices, it.masteryLoop, it.entryPly, it.priorCredits)
+        }
         journal { it.recordSessionStart(currentEpochMillis()) }
     }
 
