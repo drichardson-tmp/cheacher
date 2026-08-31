@@ -35,21 +35,30 @@ class StudyPlanTest {
         val task = plan.single()
         assertEquals("tiny", task.tree.repertoire.id, "shelf order is the curriculum")
         assertEquals(StudyKind.LEARN, task.kind)
-        assertEquals(listOf(0, 1), task.lineIndices)
+        assertNull(task.lineIndices, "a study session is responsible for the whole book")
+        assertEquals(mapOf(0 to 0.0, 1 to 0.0), task.priorCredits, "nothing banked yet")
     }
 
     @Test
-    fun accountedLinesLeaveTheLearnDeal() {
+    fun accountedLinesAreDealtAlreadyBanked() {
         val record = TrainingRecord.empty("tiny").recordLineCredit(first.lines[0].last().id, 1.0)
         val plan = studyPlan(trees, mapOf("tiny" to record), nowEpochMillis = 0L)
-        assertEquals(listOf(1), plan.single().lineIndices, "a clean line is not re-dealt")
+        assertEquals(
+            mapOf(0 to 1.0, 1 to 0.0),
+            plan.single().priorCredits,
+            "a clean line is carried into the session, not re-walked",
+        )
     }
 
     @Test
     fun halfCreditKeepsALineOnTheDeal() {
         val record = TrainingRecord.empty("tiny").recordLineCredit(first.lines[0].last().id, 0.5)
         val plan = studyPlan(trees, mapOf("tiny" to record), nowEpochMillis = 0L)
-        assertEquals(listOf(0, 1), plan.single().lineIndices, "half known is not accounted for")
+        assertEquals(
+            mapOf(0 to 0.5, 1 to 0.0),
+            plan.single().priorCredits,
+            "half known is not accounted for",
+        )
     }
 
     @Test
@@ -111,16 +120,16 @@ class StudyPlanTest {
         assertEquals(1.5, standing.creditTotal)
         assertEquals(75, standing.percent)
         assertTrue(!standing.learned)
-        assertEquals(listOf(1), standing.unaccountedLineIndices)
+        assertEquals(mapOf(0 to 1.0, 1 to 0.5), standing.bankedCredits)
     }
 
     @Test
-    fun learnDealFallsBackToTheWholeBook() {
-        // Every line clean but the finishing session never landed: the deal must not be
-        // empty, or the session would finish instantly and deal again forever.
+    fun everyLineCleanIsDealtFullyBanked() {
+        // Every line clean but the finishing session never landed: the session opens
+        // already whole and closes itself, rather than re-walking a book that is answered.
         val record = first.lines.fold(TrainingRecord.empty("tiny")) { acc, line ->
             acc.recordLineCredit(line.last().id, 1.0)
         }
-        assertEquals(listOf(0, 1), OpeningStanding(first, record).learnDeal)
+        assertEquals(mapOf(0 to 1.0, 1 to 1.0), OpeningStanding(first, record).bankedCredits)
     }
 }

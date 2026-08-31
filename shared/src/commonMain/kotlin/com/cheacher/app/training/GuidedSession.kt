@@ -34,6 +34,14 @@ data class GuidedState(
     val lineIndices: List<Int>? = null,
     /** True keeps re-dealing imperfect lines until every dealt line has a clean pass. */
     val masteryLoop: Boolean = false,
+    /**
+     * Absolute line index → the credit that line's latest walk banked *before* this
+     * session opened, read from the persisted record at deal time. The session is still
+     * responsible for the whole [deal] — that is what the score counts — but a line
+     * already banked at 1.0 is not walked again, so leaving a lesson and coming back
+     * resumes where it stopped instead of starting the book over.
+     */
+    val priorCredits: Map<Int, Double> = emptyMap(),
     /** The current pass's absolute line indices. The first pass is the whole [deal]. */
     val passLines: List<Int> = emptyList(),
     /**
@@ -149,11 +157,16 @@ data class GuidedState(
             lineIndices: List<Int>? = null,
             masteryLoop: Boolean = false,
             entryPly: Int = 0,
+            priorCredits: Map<Int, Double> = emptyMap(),
         ): GuidedState {
             val deal = lineIndices ?: tree.lines.indices.toList()
-            val shortest = deal.minOfOrNull { tree.lines[it].size } ?: 0
+            // What the record already holds for this deal: those lines start banked, and
+            // the first pass walks only what is still short of a clean, unaided answer.
+            val banked = priorCredits.filterKeys { it in deal }
+            val pass = deal.filter { (banked[it] ?: 0.0) < 1.0 }
+            val shortest = pass.minOfOrNull { tree.lines[it].size } ?: 0
             val entry = entryPly.coerceIn(0, (shortest - 1).coerceAtLeast(0))
-            val entryCheckpoint = deal.firstOrNull()
+            val entryCheckpoint = pass.firstOrNull()
                 ?.let(tree.lines::get)
                 ?.getOrNull(entry - 1)
                 ?.id
@@ -161,13 +174,15 @@ data class GuidedState(
                 tree = tree,
                 lineIndices = lineIndices,
                 masteryLoop = masteryLoop,
-                passLines = deal,
+                priorCredits = banked,
+                passLines = pass,
                 entryPly = entry,
                 lineStartPly = entry,
                 earnedCheckpointIds = setOfNotNull(entryCheckpoint),
                 trunkPly = tree.trunk().size,
                 plyIndex = entry,
-                finished = deal.isEmpty(),
+                lineCredits = banked,
+                finished = pass.isEmpty(),
             )
         }
     }

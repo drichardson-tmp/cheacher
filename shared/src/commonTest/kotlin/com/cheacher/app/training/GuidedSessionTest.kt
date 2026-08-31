@@ -210,4 +210,46 @@ class GuidedSessionTest {
         // Sanity: the expected node really is the e5 reply.
         assertEquals(Squares.parse("e5"), state.expected?.move?.to)
     }
+
+    @Test
+    fun bankedLinesAreNotWalkedAgainButStillCount() {
+        // Line 0 was answered cleanly in an earlier visit and the learner left the
+        // lesson. Coming back opens on line 1, with line 0 still on the score.
+        val state = GuidedState.start(tree, masteryLoop = true, priorCredits = mapOf(0 to 1.0))
+
+        assertEquals(listOf(1), state.passLines, "the banked line is not re-dealt")
+        assertEquals("King's Pawn Opening", state.prompt?.name, "line 1 still starts at move one")
+        assertEquals(1.0, state.sessionScore, "what was learned still counts")
+        assertEquals(2, state.deal.size, "the session is still responsible for the book")
+        assertFalse(state.finished)
+    }
+
+    @Test
+    fun aHalfCreditLineIsWalkedAgain() {
+        val state = GuidedState.start(tree, masteryLoop = true, priorCredits = mapOf(0 to 0.5))
+
+        assertEquals(listOf(0, 1), state.passLines, "half known is still owed a clean walk")
+        assertEquals(0.5, state.sessionScore)
+    }
+
+    @Test
+    fun theMasteryLoopDoesNotRedealBankedLines() {
+        var state = GuidedState.start(tree, masteryLoop = true, priorCredits = mapOf(0 to 1.0))
+        // Fumble the one line still owed, then answer it: the retry pass is that line
+        // alone — the banked line is never pulled back in.
+        state = state.submit(move("d2d4"))
+        for (uci in listOf("e2e4", "c7c5", "g1f3")) state = state.submit(move(uci))
+        assertEquals(listOf(1), state.passLines)
+
+        for (uci in listOf("e2e4", "c7c5", "g1f3")) state = state.submit(move(uci))
+        assertTrue(state.finished)
+        assertEquals(2.0, state.sessionScore, "both lines whole: the book is learned")
+    }
+
+    @Test
+    fun aFullyBankedBookOpensFinished() {
+        val state = GuidedState.start(tree, masteryLoop = true, priorCredits = mapOf(0 to 1.0, 1 to 1.0))
+        assertTrue(state.finished, "nothing is owed, so nothing is re-walked")
+        assertEquals(2.0, state.sessionScore)
+    }
 }

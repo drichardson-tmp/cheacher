@@ -86,6 +86,12 @@ sealed interface Screen {
         val kind: StudyKind,
         /** Shared opening plies already behind the learner — see [OpeningEntry]. */
         val entryPly: Int = 0,
+        /**
+         * Credits the record already holds for this book, by line index. Snapshotted at
+         * navigation like every other gate; it is what makes a lesson resume rather than
+         * restart. Empty for reviews, which re-earn every line.
+         */
+        val priorCredits: Map<Int, Double> = emptyMap(),
         /** Distinguishes consecutive deals of the same opening, so Continue always restarts. */
         val serial: Int = 0,
     ) : Screen
@@ -261,6 +267,7 @@ class RootViewModel(val progress: ProgressStore) : ViewModel() {
                     lineIndices = it.lineIndices,
                     kind = it.kind,
                     entryPly = entryPlyFor(it.tree, record, it.kind),
+                    priorCredits = if (_fullTree.value) emptyMap() else it.priorCredits,
                     serial = ++dealSerial,
                 )
             } ?: Screen.Home
@@ -272,16 +279,18 @@ class RootViewModel(val progress: ProgressStore) : ViewModel() {
             val record = settledRecordFor(tree)
             val standing = OpeningStanding(tree, record)
             val kind = if (standing.learned) StudyKind.REVIEW else StudyKind.LEARN
-            val lineIndices = when {
-                _fullTree.value -> null
-                kind == StudyKind.LEARN -> standing.learnDeal
-                else -> null
-            }
+            // The whole book, always: a LEARN session carries what the record already
+            // banked, so accounted lines still count and are not walked a second time.
             _screen.value = Screen.Guided(
                 repertoireId = tree.repertoire.id,
-                lineIndices = lineIndices,
+                lineIndices = null,
                 kind = kind,
                 entryPly = entryPlyFor(tree, record, kind),
+                priorCredits = if (_fullTree.value || kind == StudyKind.REVIEW) {
+                    emptyMap()
+                } else {
+                    standing.bankedCredits
+                },
                 serial = ++dealSerial,
             )
         }
@@ -430,6 +439,7 @@ fun App() {
                             lineIndices = current.lineIndices,
                             kind = current.kind,
                             entryPly = current.entryPly,
+                            priorCredits = current.priorCredits,
                             scope = sessionScope,
                             journal = root.journalFor(tree),
                         )
